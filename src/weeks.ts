@@ -9,6 +9,8 @@ export interface Plan {
   week: number;
   run: number;
   label: string;
+  /** How to build this run as a custom interval workout on the Watch. */
+  watch: string;
   segments: Segment[];
   totalSec: number;
 }
@@ -32,38 +34,72 @@ const alt = (n: number, runSec: number, walkSec: number): Segment[] => {
 
 interface Shape {
   label: string;
+  watch: string;
   mid: Segment[];
 }
 
+const WARM_COOL = 'warm-up 5:00 · ';
+const straight = (mins: number): string => `${WARM_COOL}work ${mins}:00 · cool-down 5:00`;
+
 /** One entry per week. One shape = all three runs the same. */
 const WEEKS: Shape[][] = [
-  [{ label: '8 × 60″ run / 90″ walk', mid: alt(8, 60, 90) }],
-  [{ label: '6 × 90″ run / 2′ walk', mid: alt(6, 90, 120) }],
   [
     {
-      label: '2 × (90″ run · 3′ run)',
+      label: '8 × 60″ run / 90″ walk',
+      watch: `${WARM_COOL}8 × (work 1:00 + recover 1:30) · cool-down 5:00`,
+      mid: alt(8, 60, 90),
+    },
+  ],
+  [
+    {
+      label: '6 × 90″ run / 2′ walk',
+      watch: `${WARM_COOL}6 × (work 1:30 + recover 2:00) · cool-down 5:00`,
+      mid: alt(6, 90, 120),
+    },
+  ],
+  [
+    {
+      label: '90″ and 3′ runs, twice through',
+      watch: `${WARM_COOL}2 × (work 1:30 + recover 1:30 + work 3:00 + recover 3:00) · cool-down 5:00`,
       mid: [r(90), w(90), r(180), w(180), r(90), w(90), r(180)],
     },
   ],
   [
     {
       label: '3′ · 5′ · 3′ · 5′ run, walks between',
+      watch: `${WARM_COOL}work 3:00 · recover 1:30 · work 5:00 · recover 2:30 · work 3:00 · recover 1:30 · work 5:00 · cool-down 5:00`,
       mid: [r(180), w(90), r(300), w(150), r(180), w(90), r(300)],
     },
   ],
   [
-    { label: '3 × 5′ run / 3′ walk', mid: alt(3, 300, 180) },
-    { label: '2 × 8′ run / 5′ walk', mid: alt(2, 480, 300) },
-    { label: '20′ run, no walking', mid: [r(1200)] },
+    {
+      label: '3 × 5′ run / 3′ walk',
+      watch: `${WARM_COOL}3 × (work 5:00 + recover 3:00) · cool-down 5:00`,
+      mid: alt(3, 300, 180),
+    },
+    {
+      label: '2 × 8′ run / 5′ walk',
+      watch: `${WARM_COOL}2 × (work 8:00 + recover 5:00) · cool-down 5:00`,
+      mid: alt(2, 480, 300),
+    },
+    { label: '20′ run, no walking', watch: straight(20), mid: [r(1200)] },
   ],
   [
-    { label: '5′ · 8′ · 5′ run / 3′ walks', mid: [r(300), w(180), r(480), w(180), r(300)] },
-    { label: '2 × 10′ run / 3′ walk', mid: alt(2, 600, 180) },
-    { label: '25′ run, no walking', mid: [r(1500)] },
+    {
+      label: '5′ · 8′ · 5′ run / 3′ walks',
+      watch: `${WARM_COOL}work 5:00 · recover 3:00 · work 8:00 · recover 3:00 · work 5:00 · cool-down 5:00`,
+      mid: [r(300), w(180), r(480), w(180), r(300)],
+    },
+    {
+      label: '2 × 10′ run / 3′ walk',
+      watch: `${WARM_COOL}2 × (work 10:00 + recover 3:00) · cool-down 5:00`,
+      mid: alt(2, 600, 180),
+    },
+    { label: '25′ run, no walking', watch: straight(25), mid: [r(1500)] },
   ],
-  [{ label: '25′ run, no walking', mid: [r(1500)] }],
-  [{ label: '28′ run, no walking', mid: [r(1680)] }],
-  [{ label: '30′ run, no walking', mid: [r(1800)] }],
+  [{ label: '25′ run, no walking', watch: straight(25), mid: [r(1500)] }],
+  [{ label: '28′ run, no walking', watch: straight(28), mid: [r(1680)] }],
+  [{ label: '30′ run, no walking', watch: straight(30), mid: [r(1800)] }],
 ];
 
 export const TOTAL_WEEKS = WEEKS.length;
@@ -78,6 +114,7 @@ export function planFor(week: number, run: number): Plan {
     week,
     run,
     label: shape.label,
+    watch: shape.watch,
     segments,
     totalSec: segments.reduce((sum, s) => sum + s.sec, 0),
   };

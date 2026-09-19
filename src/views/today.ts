@@ -12,6 +12,12 @@ import {
 } from '../store';
 import { planFor, planLine, RUNS_PER_WEEK, TOTAL_RUNS, TOTAL_WEEKS } from '../weeks';
 
+const FIRST_RUN = 'Sunday, Sep 20';
+
+const watchHint = (recipe: string): string =>
+  `<details class="watch"><summary>⌚ set up on Watch</summary>
+     <div><b>Workout → Outdoor Run → Create Custom</b><p>${recipe}</p></div></details>`;
+
 export function todayView(root: HTMLElement): () => void {
   const state = load();
   const up = nextUp(state);
@@ -46,14 +52,16 @@ export function todayView(root: HTMLElement): () => void {
         up
           ? `<h1>Week ${week}<span> · Run ${run} of 3</span></h1>
              <p class="line">${planLine(plan)}</p>
-             <a class="big" id="start" href="#/run/${week}/${run}">START</a>`
+             ${watchHint(plan.watch)}
+             <a class="big" id="start" href="#/run/${week}/${run}">START</a>
+             ${state.completedRuns.length === 0 ? `<p class="line quiet mid">First run: ${FIRST_RUN}</p>` : ''}`
           : `<h1>All nine weeks<span> · done</span></h1>
              <p class="line">You run 5k now. Go again whenever you like.</p>
              <a class="big" id="start" href="#/run/9/3">RUN 30′</a>`
       }
       ${
         repeatWeek
-          ? `<p class="line quiet">Week ${repeatWeek} felt hard? <a href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a> — doing a week twice is normal and changes nothing about the plan.</p>`
+          ? `<p class="line quiet">Week ${repeatWeek} felt hard? <a href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a> — a week done twice still counts.</p>`
           : ''
       }
       <div class="grid">${grid}</div>

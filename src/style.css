@@ -22,8 +22,8 @@
     --line: #dfe3e5;
     --text: #14181b;
     --muted: #626c72;
-    --run: #74a30c;
-    --walk: #0f9a88;
+    --run: #5d8a0a;
+    --walk: #0c7f70;
     --run-dim: #e2eec0;
     --walk-dim: #cdeeea;
     --ink: #ffffff;
@@ -148,7 +148,49 @@ h1 span {
 }
 
 .today .line {
-  margin-bottom: 28px;
+  margin-bottom: 16px;
+}
+
+.watch {
+  margin-bottom: 26px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.watch summary {
+  padding: 2px 0;
+  list-style: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.watch summary::-webkit-details-marker {
+  display: none;
+}
+
+.watch div {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.watch b {
+  font: 500 12px/1.4 var(--sans);
+}
+
+.watch p {
+  color: var(--text);
+  font: 400 12px/1.7 var(--mono);
+  opacity: 0.8;
+}
+
+.mid {
+  margin-top: 14px;
+  text-align: center;
 }
 
 .today .quiet {
