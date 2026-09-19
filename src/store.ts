@@ -12,14 +12,25 @@ export interface Settings {
   beep: boolean;
 }
 
+/** One-shot moments: a grid that fills in, a hint shown once. */
+export interface Flags {
+  celebrate?: boolean;
+  hintSeen?: boolean;
+}
+
 export interface State {
   completedRuns: CompletedRun[];
   settings: Settings;
+  flags: Flags;
 }
 
 const KEY = 'c25k.v1';
 
-const blank = (): State => ({ completedRuns: [], settings: { voice: true, beep: true } });
+const blank = (): State => ({
+  completedRuns: [],
+  settings: { voice: true, beep: true },
+  flags: {},
+});
 
 export function load(): State {
   try {
@@ -29,6 +40,7 @@ export function load(): State {
     return {
       completedRuns: Array.isArray(parsed.completedRuns) ? parsed.completedRuns : [],
       settings: { ...blank().settings, ...(parsed.settings ?? {}) },
+      flags: parsed.flags ?? {},
     };
   } catch {
     return blank();
@@ -47,8 +59,31 @@ export function recordRun(week: number, run: number, durationSec: number): State
     date: new Date().toISOString(),
     durationSec: Math.round(durationSec),
   });
+  state.flags.celebrate = true;
   save(state);
   return state;
+}
+
+/** True once, right after a run lands: the grid gets to fill itself in. */
+export function claimCelebrate(): boolean {
+  const state = load();
+  const yes = !!state.flags.celebrate;
+  if (yes) {
+    state.flags.celebrate = false;
+    save(state);
+  }
+  return yes;
+}
+
+/** True on the first session only, for the hold-to-pause hint. */
+export function claimHint(): boolean {
+  const state = load();
+  const yes = !state.flags.hintSeen;
+  if (yes) {
+    state.flags.hintSeen = true;
+    save(state);
+  }
+  return yes;
 }
 
 export function setSettings(patch: Partial<Settings>): Settings {
@@ -100,6 +135,7 @@ export async function importFile(file: File): Promise<boolean> {
     save({
       completedRuns: parsed.completedRuns,
       settings: { ...blank().settings, ...(parsed.settings ?? {}) },
+      flags: parsed.flags ?? {},
     });
     return true;
   } catch {

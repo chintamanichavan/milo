@@ -1,4 +1,4 @@
-import { laurel } from '../badge';
+import { miloMark } from '../badge';
 import { load, weekDone } from '../store';
 import { clock, RUNS_PER_WEEK } from '../weeks';
 
@@ -38,11 +38,14 @@ export function doneView(root: HTMLElement): () => void {
   root.innerHTML = `
     <section class="done">
       <div class="ring">
-        <svg viewBox="0 0 160 160" width="180" height="180">
+        <svg viewBox="0 0 160 160" width="184" height="184">
           <circle class="ring-bg" cx="80" cy="80" r="70"/>
           <circle class="ring-fg" cx="80" cy="80" r="70"/>
         </svg>
-        <div class="ring-mid"><b>${clock(durationSec)}</b><span>time moving</span></div>
+        <div class="ring-mid">
+          <span class="check">${miloMark(30, 30)}</span>
+          <b>${clock(durationSec)}</b><span>time moving</span>
+        </div>
       </div>
       <h1>Week ${week} Run ${run}<br>${partial ? 'in the bag' : 'done'}</h1>
       <p class="say">${
@@ -52,14 +55,13 @@ export function doneView(root: HTMLElement): () => void {
       }</p>
       ${
         earned
-          ? `<div class="earn">${laurel(week, 64)}<span>Week ${week} finished — badge earned</span></div>`
+          ? `<div class="earn">${miloMark(48, 30)}<span>Week ${week} finished. Badge earned!</span></div>`
           : ''
       }
-      <a class="big" href="#/">Back to today</a>
+      <a class="big tap" href="#/">Back to today</a>
     </section>`;
 
-  const fg = root.querySelector<SVGCircleElement>('.ring-fg')!;
-  requestAnimationFrame(() => fg.classList.add('full'));
+  requestAnimationFrame(() => root.querySelector('.done')!.classList.add('sealed'));
   result = null;
   return () => {};
 }

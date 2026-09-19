@@ -1,6 +1,7 @@
 import { unlockAudio } from '../audio';
-import { laurel } from '../badge';
+import { miloMark, watchGlyph } from '../badge';
 import {
+  claimCelebrate,
   doneCount,
   exportFile,
   importFile,
@@ -10,12 +11,12 @@ import {
   setSettings,
   weekDone,
 } from '../store';
-import { planFor, planLine, RUNS_PER_WEEK, TOTAL_RUNS, TOTAL_WEEKS } from '../weeks';
+import { planFor, RUNS_PER_WEEK, TOTAL_RUNS, TOTAL_WEEKS, totalLine } from '../weeks';
 
 const FIRST_RUN = 'Sunday, Sep 20';
 
 const watchHint = (recipe: string): string =>
-  `<details class="watch"><summary>⌚ set up on Watch</summary>
+  `<details class="watch"><summary><span class="tap">${watchGlyph()} set up on Watch</span></summary>
      <div><b>Workout → Outdoor Run → Create Custom</b><p>${recipe}</p></div></details>`;
 
 export function todayView(root: HTMLElement): () => void {
@@ -24,53 +25,57 @@ export function todayView(root: HTMLElement): () => void {
   const week = up?.week ?? TOTAL_WEEKS;
   const run = up?.run ?? RUNS_PER_WEEK;
   const plan = planFor(week, run);
+  const celebrate = claimCelebrate();
 
+  let order = 0;
   const grid = Array.from({ length: TOTAL_WEEKS }, (_, wi) => {
     const w = wi + 1;
     const cells = Array.from({ length: RUNS_PER_WEEK }, (_, ri) => {
-      const state2 = isDone(state, w, ri + 1)
-        ? 'on'
-        : up && up.week === w && up.run === ri + 1
-          ? 'now'
-          : '';
-      return `<i class="cell ${state2}"></i>`;
+      const done = isDone(state, w, ri + 1);
+      const now = up && up.week === w && up.run === ri + 1;
+      const cls = done ? 'cell on' : now ? 'cell now' : 'cell';
+      return `<i class="${cls}"${done ? ` style="--i:${order++}"` : ''}></i>`;
     }).join('');
-    return `<div class="col">${cells}<b>${w}</b></div>`;
+    const foot = weekDone(state, w) ? `<span class="won">${miloMark(22, 44)}</span>` : `<b>${w}</b>`;
+    return `<div class="col">${cells}${foot}</div>`;
   }).join('');
-
-  const badges = Array.from({ length: TOTAL_WEEKS }, (_, wi) => wi + 1)
-    .filter((w) => weekDone(state, w))
-    .map((w) => laurel(w))
-    .join('');
 
   const repeatWeek = up && up.run === 1 && up.week > 1 ? up.week - 1 : null;
 
   root.innerHTML = `
-    <section class="today">
-      <header class="head"><span class="tag">C25K</span><span class="tag">${doneCount(state)} / ${TOTAL_RUNS} runs</span></header>
-      ${
-        up
-          ? `<h1>Week ${week}<span> · Run ${run} of 3</span></h1>
-             <p class="line">${planLine(plan)}</p>
-             ${watchHint(plan.watch)}
-             <a class="big" id="start" href="#/run/${week}/${run}">START</a>
-             ${state.completedRuns.length === 0 ? `<p class="line quiet mid">First run: ${FIRST_RUN}</p>` : ''}`
-          : `<h1>All nine weeks<span> · done</span></h1>
-             <p class="line">You run 5k now. Go again whenever you like.</p>
-             <a class="big" id="start" href="#/run/9/3">RUN 30′</a>`
-      }
-      ${
-        repeatWeek
-          ? `<p class="line quiet">Week ${repeatWeek} felt hard? <a href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a> — a week done twice still counts.</p>`
-          : ''
-      }
+    <section class="today${celebrate ? ' celebrate' : ''}">
+      <header class="head">
+        <span class="wordmark">${miloMark()}<b>MILO</b></span>
+        <span class="tag">${doneCount(state)} of ${TOTAL_RUNS} runs</span>
+      </header>
+      <div class="hero">
+        <p class="tag section">Couch to 5K</p>
+        ${
+          up
+            ? `<h1>Week ${week}<span><i> · </i>Run ${run} of 3</span></h1>
+               <p class="line">${plan.label}.</p>
+               <p class="line sub">${totalLine(plan)}</p>
+               ${watchHint(plan.watch)}
+               <a class="big tap" id="start" href="#/run/${week}/${run}">START</a>
+               ${state.completedRuns.length === 0 ? `<p class="line sub mid">First run: ${FIRST_RUN}</p>` : ''}`
+            : `<h1>All nine weeks<span><i> · </i>done</span></h1>
+               <p class="line">You run 5k now. Go again whenever you like.</p>
+               <p class="line sub">${totalLine(plan)}</p>
+               ${watchHint(plan.watch)}
+               <a class="big tap" id="start" href="#/run/9/3">RUN 30′</a>`
+        }
+        ${
+          repeatWeek
+            ? `<p class="line sub">Week ${repeatWeek} felt hard? <a class="tap" href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a> — a week done twice still counts.</p>`
+            : ''
+        }
+      </div>
       <div class="grid">${grid}</div>
-      ${badges ? `<div class="badges">${badges}</div>` : ''}
       <footer class="foot">
-        <label class="sw"><input type="checkbox" id="voice" ${state.settings.voice ? 'checked' : ''}><span>Voice cues</span></label>
-        <label class="sw"><input type="checkbox" id="beep" ${state.settings.beep ? 'checked' : ''}><span>Beeps</span></label>
-        <button class="link" id="export">Export</button>
-        <label class="link">Import<input type="file" id="import" accept="application/json" hidden></label>
+        <label class="sw tap"><input type="checkbox" id="voice" ${state.settings.voice ? 'checked' : ''}><span>Voice cues</span></label>
+        <label class="sw tap"><input type="checkbox" id="beep" ${state.settings.beep ? 'checked' : ''}><span>Beeps</span></label>
+        <button class="link tap" id="export">Export</button>
+        <label class="link tap" tabindex="0">Import<input type="file" id="import" accept="application/json" hidden></label>
       </footer>
     </section>`;
 

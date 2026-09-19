@@ -16,19 +16,21 @@ export function unlockAudio(): void {
   }
 }
 
-type Note = [freq: number, startMs: number, lenMs: number];
+type Note = [freq: number, startMs: number, lenMs: number, gain?: number];
 
 const PATTERNS: Record<string, Note[]> = {
   run: [[740, 0, 110], [1109, 120, 220]],
   walk: [[622, 0, 130], [466, 140, 240]],
   halfway: [[880, 0, 90], [880, 160, 90]],
   done: [[659, 0, 150], [880, 170, 150], [1319, 340, 480]],
+  tick: [[1046, 0, 45, 0.12]],
+  go: [[880, 0, 90], [1319, 100, 320]],
 };
 
 export function beep(pattern: keyof typeof PATTERNS): void {
   if (!ctx || !load().settings.beep) return;
   const t0 = ctx.currentTime + 0.02;
-  for (const [freq, startMs, lenMs] of PATTERNS[pattern]) {
+  for (const [freq, startMs, lenMs, gainTo = 0.28] of PATTERNS[pattern]) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const start = t0 + startMs / 1000;
@@ -36,7 +38,7 @@ export function beep(pattern: keyof typeof PATTERNS): void {
     osc.type = 'sine';
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.28, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(gainTo, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, end);
     osc.connect(gain).connect(ctx.destination);
     osc.start(start);
