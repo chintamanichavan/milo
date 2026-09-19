@@ -1,0 +1,21 @@
+import { suggest } from './progression.ts';
+const item = { exerciseId: 'bench', sets: 3, low: 8, high: 12 };
+const S = (w, ...reps) => reps.map((r) => ({ weightLb: w, reps: r, done: true }));
+let bad = 0;
+const t = (name, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`, ok ? '' : `\n  got ${JSON.stringify(got)}\n want ${JSON.stringify(want)}`);
+};
+t('first time', suggest([], item, 5).move, 'new');
+t('first time weight', suggest([], item, 5).weightLb, null);
+t('all at top of range goes up', suggest([S(105, 12, 12, 12)], item, 5).weightLb, 110);
+t('one set short holds', suggest([S(105, 12, 11, 12)], item, 5).move, 'hold');
+t('holds the same weight', suggest([S(105, 12, 11, 12)], item, 5).weightLb, 105);
+t('one bad session holds', suggest([S(105, 10, 10, 10), S(105, 7, 7, 6)], item, 5).move, 'hold');
+t('two bad sessions back off', suggest([S(105, 7, 6, 6), S(105, 7, 7, 6)], item, 5).move, 'down');
+t('back off rounds to the increment', suggest([S(105, 7, 6, 6), S(105, 7, 7, 6)], item, 5).weightLb, 95);
+t('too few sets logged holds', suggest([S(105, 12, 12)], item, 5).move, 'hold');
+t('rounds dumbbell jumps', suggest([S(35, 12, 12, 12)], item, 2.5).weightLb, 37.5);
+console.log(bad ? `${bad} FAILED` : 'progression: all green');
+process.exit(bad ? 1 : 0);

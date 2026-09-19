@@ -1,12 +1,13 @@
 {
-  "name": "c25k",
+  "name": "milo",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node src/lift/progression.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

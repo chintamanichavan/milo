@@ -1,3 +1,4 @@
+import { LIFT_KEY } from './lift/store';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
 export interface CompletedRun {
@@ -118,25 +119,34 @@ export function doneCount(state: State): number {
   return n;
 }
 
+/** One file holds both halves of the app. */
 export function exportFile(): void {
-  const blob = new Blob([JSON.stringify(load(), null, 2)], { type: 'application/json' });
+  const bundle = {
+    run: load(),
+    lift: JSON.parse(localStorage.getItem(LIFT_KEY) ?? 'null') as unknown,
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `c25k-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `milo-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function importFile(file: File): Promise<boolean> {
   try {
-    const parsed = JSON.parse(await file.text()) as Partial<State>;
-    if (!Array.isArray(parsed.completedRuns)) return false;
+    const parsed = JSON.parse(await file.text()) as { run?: Partial<State>; lift?: unknown } &
+      Partial<State>;
+    // older exports were the run half on its own
+    const run = Array.isArray(parsed.completedRuns) ? parsed : parsed.run;
+    if (!run || !Array.isArray(run.completedRuns)) return false;
     save({
-      completedRuns: parsed.completedRuns,
-      settings: { ...blank().settings, ...(parsed.settings ?? {}) },
-      flags: parsed.flags ?? {},
+      completedRuns: run.completedRuns,
+      settings: { ...blank().settings, ...(run.settings ?? {}) },
+      flags: run.flags ?? {},
     });
+    if (parsed.lift) localStorage.setItem(LIFT_KEY, JSON.stringify(parsed.lift));
     return true;
   } catch {
     return false;
