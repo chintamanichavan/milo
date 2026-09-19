@@ -42,7 +42,7 @@ export function doneView(root: HTMLElement): () => void {
           <circle class="ring-bg" cx="80" cy="80" r="70"/>
           <circle class="ring-fg" cx="80" cy="80" r="70"/>
         </svg>
-        <div class="ring-mid"><b>${clock(durationSec)}</b><span>minutes</span></div>
+        <div class="ring-mid"><b>${clock(durationSec)}</b><span>time moving</span></div>
       </div>
       <h1>Week ${week} Run ${run}<br>${partial ? 'in the bag' : 'done'}</h1>
       <p class="say">${
