@@ -1,5 +1,5 @@
 import { unlockAudio } from '../audio';
-import { miloMark, watchGlyph } from '../badge';
+import { miloMark, tabBar, watchGlyph } from '../badge';
 import {
   claimCelebrate,
   doneCount,
@@ -46,10 +46,10 @@ export function todayView(root: HTMLElement): () => void {
     <section class="today${celebrate ? ' celebrate' : ''}">
       <header class="head">
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
-        <span class="tag">${doneCount(state)} of ${TOTAL_RUNS} runs</span>
+        ${tabBar('run')}
       </header>
       <div class="hero">
-        <p class="tag section">Couch to 5K</p>
+        <p class="tag section">Couch to 5K · ${doneCount(state)} of ${TOTAL_RUNS} runs</p>
         ${
           up
             ? `<h1>Week ${week}<span><i> · </i>Run ${run} of 3</span></h1>

@@ -15,8 +15,15 @@ export interface Suggestion {
   why: string;
 }
 
-const round = (lb: number, inc: number): number =>
-  inc > 0 ? Math.max(inc, Math.round(lb / inc) * inc) : Math.round(lb);
+/** one step up that exercise's ladder */
+const up = (lb: number, inc: number): number => (inc > 0 ? lb + inc : lb);
+
+/** about ten percent off, in whole steps, never below one step */
+const down = (lb: number, inc: number): number => {
+  if (inc <= 0) return lb;
+  const drop = Math.max(inc, Math.round((lb * 0.1) / inc) * inc);
+  return Math.max(inc, lb - drop);
+};
 
 const working = (sets: SetLog[]): SetLog[] => sets.filter((s) => s.done && s.reps > 0);
 
@@ -40,7 +47,7 @@ export function suggest(past: SetLog[][], item: RoutineItem, inc: number): Sugge
 
   if (sets.length >= item.sets && reps.every((r) => r >= item.high))
     return {
-      weightLb: round(weight + inc, inc),
+      weightLb: up(weight, inc),
       move: 'up',
       why: `Hit ${list} at ${weight} lb — time to go up.`,
     };
@@ -51,7 +58,7 @@ export function suggest(past: SetLog[][], item: RoutineItem, inc: number): Sugge
   };
   if (short(last) && short(past[past.length - 2]))
     return {
-      weightLb: round(weight * 0.9, inc),
+      weightLb: down(weight, inc),
       move: 'down',
       why: `Two sessions under ${item.low} reps — drop ten percent and build it back.`,
     };

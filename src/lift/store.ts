@@ -76,12 +76,18 @@ export function nextRoutine(state: LiftState): Routine {
   return state.routines[(at + 1) % state.routines.length];
 }
 
-/** That exercise's past set lists, oldest first. */
+/** Sessions where that exercise was actually worked, oldest first. */
+export function sessionsWith(state: LiftState, exerciseId: string): Session[] {
+  return state.sessions.filter((s) =>
+    s.entries.some((e) => e.exerciseId === exerciseId && e.sets.some((x) => x.done)),
+  );
+}
+
+/** That exercise's past set lists, oldest first. Skipped days do not count. */
 export function pastSets(state: LiftState, exerciseId: string): SetLog[][] {
-  return state.sessions
-    .map((s) => s.entries.find((e) => e.exerciseId === exerciseId))
-    .filter((e): e is Entry => !!e)
-    .map((e) => e.sets);
+  return sessionsWith(state, exerciseId).map(
+    (s) => s.entries.find((e) => e.exerciseId === exerciseId)!.sets,
+  );
 }
 
 export function restFor(state: LiftState, exerciseId: string): number {
