@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0b0d0f"/>
+  <g fill="none" stroke="#c5f74f" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <!-- MILO mark: an M whose outer stems sweep out and curl like bull horns -->
+    <path d="M132 384 L132 208 C132 158 112 128 76 112"/>
+    <path d="M380 384 L380 208 C380 158 400 128 436 112"/>
+    <path d="M132 208 L256 336 L380 208"/>
+  </g>
+</svg>

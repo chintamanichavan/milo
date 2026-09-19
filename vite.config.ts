@@ -8,9 +8,9 @@ export default defineConfig({
       includeAssets: ['apple-touch-icon.png'],
       workbox: { globPatterns: ['**/*.{js,css,html,png,svg,ico}'] },
       manifest: {
-        name: 'C25K',
-        short_name: 'C25K',
-        description: 'Nine weeks from walking to a 5k.',
+        name: 'Milo',
+        short_name: 'Milo',
+        description: 'Couch to 5K and progressive lifting. Carried daily, grows slowly.',
         start_url: '/',
         display: 'standalone',
         orientation: 'portrait',

@@ -1,6 +1,6 @@
-# C25K
+# Milo
 
-Nine weeks, three runs a week, walking to a 5k. Static PWA, no backend, no accounts.
+Milo — couch to 5K + progressive lifting. Carried daily, grows slowly. Static PWA, no backend, no accounts.
 
 - Build: `npm install && npm run build` (output lands in `dist/`)
 - Run: `docker compose up -d` — serves on `http://127.0.0.1:8200`
