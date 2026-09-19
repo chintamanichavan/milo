@@ -59,7 +59,7 @@ const WEEKS: Shape[][] = [
   ],
   [
     {
-      label: 'Ninety seconds, then three minutes of running. Twice through.',
+      label: 'Ninety seconds, then three minutes of running, twice through',
       watch: `${WARM_COOL}2 × (work 1:30 + recover 1:30 + work 3:00 + recover 3:00) · cool-down 5:00`,
       mid: [r(90), w(90), r(180), w(180), r(90), w(90), r(180)],
     },

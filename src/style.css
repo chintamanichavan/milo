@@ -249,6 +249,10 @@ a {
   margin-bottom: calc(var(--u) * 2);
 }
 
+.hero .big {
+  margin-bottom: calc(var(--u) * 2);
+}
+
 .today .mid {
   margin-top: calc(var(--u) * 2);
   text-align: center;
@@ -1053,6 +1057,11 @@ a.ex-name {
 
   h1 span i {
     display: none;
+  }
+
+  .hist {
+    grid-area: 3 / 2 / 4 / 3;
+    margin-top: 0;
   }
 
   .grid {

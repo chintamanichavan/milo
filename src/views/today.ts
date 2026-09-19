@@ -66,7 +66,8 @@ export function todayView(root: HTMLElement): () => void {
         }
         ${
           repeatWeek
-            ? `<p class="line sub">Week ${repeatWeek} felt hard? <a class="tap" href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a> — a week done twice still counts.</p>`
+            ? `<p class="line sub">Week ${repeatWeek} felt hard? A week done twice still counts.</p>
+               <a class="link tap" href="#/run/${repeatWeek}/1">Repeat week ${repeatWeek}</a>`
             : ''
         }
       </div>
