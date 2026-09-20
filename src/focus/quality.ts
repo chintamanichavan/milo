@@ -96,6 +96,8 @@ export class Governor {
   private good = 0;
   private patience = 8;
   private recent = 0;
+  /** the largest size that has not yet cost us frames */
+  private ceiling = 1;
   scale = 1;
 
   constructor(
@@ -116,9 +118,10 @@ export class Governor {
     if (mean > this.target) {
       this.good = 0;
       if (this.scale > 0.6) {
+        // it failed at that size, so stay under it and wait longer each time
+        this.ceiling = Math.max(0.6, this.scale - 0.05);
         this.scale = Math.max(0.6, this.scale - 0.15);
         this.onScale(this.scale);
-        // it failed at that size, so wait longer before trying again
         this.patience = Math.min(64, this.patience * 2);
       }
       return;
@@ -126,9 +129,9 @@ export class Governor {
     // a screen caps us at its own refresh, so keeping up with the cadence is as
     // fast as it gets: wait for a stretch of it, then take some sharpness back
     this.good += mean < this.target - 1 ? 1 : 0;
-    if (this.scale < 1 && this.good >= this.patience) {
+    if (this.scale + 0.1 <= this.ceiling && this.good >= this.patience) {
       this.good = 0;
-      this.scale = Math.min(1, this.scale + 0.1);
+      this.scale = Math.min(this.ceiling, this.scale + 0.1);
       this.onScale(this.scale);
     }
   }

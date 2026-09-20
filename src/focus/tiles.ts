@@ -180,6 +180,10 @@ export function createTileLayer(scene: THREE.Scene, sunDir: { value: THREE.Vecto
       // the closer the camera, the finer the tiles
       const altitude = Math.max(0.02, distance - 1);
       const zoom = Math.round(THREE.MathUtils.clamp(Math.log2(1.4 / altitude) + 5.2, 3, maxZoom));
+      // from far off, a tile is no sharper than the map already underneath it,
+      // and its colours only patchwork the planet
+      group.visible = zoom >= 6;
+      if (!group.visible) return;
       // nothing to do until the camera has gone somewhere or changed its height
       if (centre.distanceTo(lastCentre) < 0.02 && tiles.size > 0 && zoom === lastZoom) return;
       lastCentre.copy(centre);

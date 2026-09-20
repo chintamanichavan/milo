@@ -447,7 +447,7 @@ export async function createGlobe(
       const made = new EffectComposer(renderer);
       made.addPass(new RenderPass(scene, camera));
       // only the bright side of the terminator and the city lights should bleed
-      if (fx.bloom) made.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.55, 0.82));
+      if (fx.bloom) made.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92));
       if (fx.smaa) made.addPass(new SMAAPass());
       made.addPass(new OutputPass());
       composer = made;
@@ -933,12 +933,12 @@ export async function createGlobe(
         };
       },
       /** point the camera straight down at a place, for ground-truth checks */
-      centreOn(lat: number, lon: number) {
+      centreOn(lat: number, lon: number, distance?: number) {
         frozen = true;
         manualUntil = Date.now() + 600_000;
         const at = llToVec3(lat, lon);
         desiredTarget.set(0, 0, 0);
-        camera.position.copy(at.clone().normalize().multiplyScalar(fitDistance(1.02)));
+        camera.position.copy(at.clone().normalize().multiplyScalar(distance ?? fitDistance(1.02)));
         camera.lookAt(0, 0, 0);
         render();
       },
