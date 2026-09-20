@@ -19,6 +19,12 @@ const HOLD_MS = 800;
 const GRACE_MS = 20_000;
 const SKIES: SkyMode[] = ['globe', 'satellite', 'flat'];
 
+/** the test hook can move the sun, so screenshots can show either face */
+const sunClock = (): Date => {
+  const forced = (window as unknown as { __c25kSun?: string }).__c25kSun;
+  return forced ? new Date(forced) : new Date();
+};
+
 export function flightView(root: HTMLElement, minutes: number, label: string): () => void {
   const plannedSec = Math.max(60, Math.round(minutes * 60));
   const state = loadFocus();
@@ -34,8 +40,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   root.innerHTML = `
     <section class="flight" id="stage" data-progress="0" tabindex="0" role="button"
       aria-label="Hold anywhere to divert">
-      <div class="sky-host full" id="sky"></div>
-      <div class="scrim"></div>
+      <div class="sky-stage"><div class="sky-host stage" id="sky"></div><div class="sky-fade"></div></div>
       <header class="run-head">
         <span class="tag">${route.from.iata} → ${route.to.iata} · ${Math.round(
           plannedSec / 60,
@@ -78,7 +83,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     sky?.dispose();
     sky = await createSky(
       root.querySelector<HTMLElement>('#sky')!,
-      { route, showPlane: true, interactive: true },
+      { route, showPlane: true, interactive: true, flyIn: true, now: sunClock },
       next,
     );
     skyBtn.textContent = sky.mode;
@@ -227,6 +232,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     paint();
     if (Date.now() > dimAt && !document.body.classList.contains('dim')) {
       document.body.classList.add('dim');
+      sky?.setQuality?.('low');
       sky?.pause(); // battery matters mid-flight
     }
   }, 200);

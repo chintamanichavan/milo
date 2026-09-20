@@ -10,6 +10,16 @@ export interface SatMapHandle {
 /** Esri World Imagery — attribution is required and shown on the map. */
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
+  // the online view is a zoomable satellite globe
+  projection: { type: 'globe' },
+  sky: {
+    'sky-color': '#0b1020',
+    'horizon-color': '#6f86b8',
+    'fog-color': '#0b0d0f',
+    'sky-horizon-blend': 0.6,
+    'horizon-fog-blend': 0.6,
+    'fog-ground-blend': 0.4,
+  },
   sources: {
     esri: {
       type: 'raster',
@@ -17,11 +27,33 @@ const STYLE: maplibregl.StyleSpecification = {
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution:
-        'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      maxzoom: 18,
+      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    },
+    hillshade: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 14,
+      attribution: 'Hillshade © Esri',
+    },
+    labels: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 14,
+      attribution: 'Reference © Esri',
     },
   },
-  layers: [{ id: 'esri', type: 'raster', source: 'esri' }],
+  layers: [
+    { id: 'esri', type: 'raster', source: 'esri' },
+    { id: 'hillshade', type: 'raster', source: 'hillshade', paint: { 'raster-opacity': 0.35 } },
+    { id: 'labels', type: 'raster', source: 'labels', paint: { 'raster-opacity': 0.8 } },
+  ],
 };
 
 /** great-circle interpolation, in degrees */
@@ -59,7 +91,7 @@ export async function createSatMap(
     container: host,
     style: STYLE,
     center: [route.from.lon, route.from.lat],
-    zoom: 3,
+    zoom: 2.4,
     attributionControl: { compact: true },
     interactive: true,
   });

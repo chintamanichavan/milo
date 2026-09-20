@@ -8,6 +8,7 @@ export interface Sky {
   setProgress(t: number): void;
   pause(): void;
   resume(): void;
+  setQuality?(mode: 'full' | 'low'): void;
   dispose(): void;
 }
 
@@ -16,6 +17,7 @@ interface SkyOptions {
   showPlane: boolean;
   interactive: boolean;
   now?: () => Date;
+  flyIn?: boolean;
 }
 
 /** The flat map is the one that always works: no WebGL, no network. */
@@ -89,6 +91,7 @@ export async function createSky(host: HTMLElement, options: SkyOptions, mode: Sk
         route: options.route,
         showPlane: options.showPlane,
         now: options.now,
+        flyIn: options.flyIn,
       });
       host.dataset.sky = 'globe';
       return {
@@ -96,6 +99,7 @@ export async function createSky(host: HTMLElement, options: SkyOptions, mode: Sk
         setProgress: (t) => globe.setProgress(t),
         pause: () => globe.pause(),
         resume: () => globe.resume(),
+        setQuality: (mode) => globe.setQuality(mode),
         dispose: () => globe.dispose(),
       };
     } catch {

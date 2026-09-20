@@ -132,6 +132,10 @@ route();
 if (new URLSearchParams(location.search).has('test'))
   (window as unknown as { __c25k: unknown }).__c25k = {
     tick: (seconds: number) => advance(seconds * 1000),
+    /** force the sun somewhere, so day and night can both be photographed */
+    sunAt: (iso: string) => {
+      (window as unknown as { __c25kSun?: string }).__c25kSun = iso;
+    },
   };
 
 registerSW({ immediate: true });
