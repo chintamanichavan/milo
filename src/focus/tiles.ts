@@ -17,7 +17,9 @@ export const ESRI_ATTRIBUTION = 'Imagery © Esri, Maxar, Earthstar Geographics';
 const MAX_TILES = 150;
 /** how often the tile set is recomputed, in ms */
 export const TILE_INTERVAL = 700;
-const RADIUS = 1.0016;
+// far enough above the map that neither the globe's facets nor the patch's own
+// sag can poke through it and dapple the imagery
+const RADIUS = 1.0025;
 
 /** inverse Web Mercator: tile row to latitude */
 const tileLat = (y: number, z: number): number =>
@@ -91,10 +93,12 @@ export function createTileLayer(scene: THREE.Scene, sunDir: { value: THREE.Vecto
     const south = tileLat(y + 1, z);
     const west = tileLon(x, z);
     const east = tileLon(x + 1, z);
+    // a wide tile needs more segments, or the flat quads sink into the sphere
+    const segments = Math.max(4, Math.min(12, Math.round((east - west) / 2.5)));
     const geometry = new THREE.SphereGeometry(
       RADIUS,
-      4,
-      4,
+      segments,
+      segments,
       ((west + 180) * Math.PI) / 180,
       ((east - west) * Math.PI) / 180,
       ((90 - north) * Math.PI) / 180,

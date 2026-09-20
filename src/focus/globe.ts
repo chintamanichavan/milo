@@ -863,7 +863,17 @@ export async function createGlobe(
     draw();
   }
 
+  const drawSize = new THREE.Vector2();
+
   function draw(): void {
+    // whatever the layout has done to the canvas, the projection matches the
+    // buffer we are about to fill, or the planet comes out an egg
+    renderer.getSize(drawSize);
+    const aspect = drawSize.x / Math.max(1, drawSize.y);
+    if (Math.abs(camera.aspect - aspect) > 0.002) {
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+    }
     if (composer) composer.render();
     else renderer.render(scene, camera);
   }
