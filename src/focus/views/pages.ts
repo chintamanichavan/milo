@@ -2,7 +2,8 @@ import { miloMark } from '../../badge';
 import { barList, columns, lineChart } from '../../ui/chart';
 import { toast } from '../../ui/toast';
 import { BADGES } from '../achievements';
-import { AIRPORTS, airport, type Continent } from '../airports';
+import { AIRPORTS, airport, distanceKm, KM_TO_MI, type Continent } from '../airports';
+import { rankFor, nextRank, wings } from '../flightkit';
 import { FLEET, nextUnlock, planeGlyph, unlocked } from '../planes';
 import { createSky, type Sky } from '../sky';
 import {
@@ -67,6 +68,7 @@ export function routesView(root: HTMLElement): () => void {
       <h1>${visits.size}<span><i> · </i>${visits.size === 1 ? 'city' : 'cities'}</span></h1>
       <p class="line sub">${continents.size} of 6 continents · ${AIRPORTS.length} airports in the world</p>
       <div class="sky-host wide" id="passport"></div>
+      <p class="tag">${landed(state).filter((f) => f.from && f.to).length} routes flown</p>
     </div>
     ${
       rows
@@ -220,6 +222,16 @@ export function statsView(root: HTMLElement): () => void {
   const avg = flights.length ? flights.reduce((s, f) => s + f.actualSec, 0) / flights.length / 60 : 0;
   const rate = all.length ? Math.round((ok.length / all.length) * 100) : 0;
 
+  // 80. distance, places and favourites
+  const legs = ok.filter((f) => f.from && f.to);
+  const totalKm = legs.reduce((sum, f) => sum + distanceKm(airport(f.from!), airport(f.to!)), 0);
+  const longest = legs
+    .map((f) => ({ f, km: distanceKm(airport(f.from!), airport(f.to!)) }))
+    .sort((a, b) => b.km - a.km)[0];
+  const cities = new Set(legs.map((f) => f.to!));
+  const continents = new Set(legs.map((f) => airport(f.to!).continent));
+  const favourite = [...byLabel.entries()].sort((a, b) => b[1] - a[1])[0];
+
   root.innerHTML = shell(
     'stats',
     `<div class="hero">
@@ -257,6 +269,21 @@ export function statsView(root: HTMLElement): () => void {
     <div class="panel">
       <p class="tag">Last six months</p>
       ${barList(months.map((m) => ({ label: m.label, value: m.value })), ' h')}
+    </div>
+    <div class="panel">
+      <p class="tag">Distance</p>
+      <p class="line sub">${Math.round(totalKm).toLocaleString('en-US')} km
+        (${Math.round(totalKm * KM_TO_MI).toLocaleString('en-US')} mi) flown ·
+        ${(totalKm / 40_075).toFixed(2)}× around the Earth</p>
+      <p class="line sub">${cities.size} cities · ${continents.size} of 6 continents${
+        longest ? ` · longest ${longest.f.from} → ${longest.f.to}, ${longest.km.toLocaleString('en-US')} km` : ''
+      }</p>
+      <p class="line sub">${favourite ? `Most time on ${favourite[0]}` : 'No favourite yet'} ·
+        ${wings(rankFor(landedHours(state)).name, 30)} ${rankFor(landedHours(state)).name}${
+          nextRank(landedHours(state))
+            ? `, ${(nextRank(landedHours(state))!.hours - landedHours(state)).toFixed(1)} h to ${nextRank(landedHours(state))!.name}`
+            : ''
+        }</p>
     </div>
     <p class="line sub">Best day: ${
       bestDay ? `${new Date(bestDay[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${hh(bestDay[1])}` : '—'

@@ -11,6 +11,13 @@ export interface Flight {
   from?: string;
   to?: string;
   aircraft?: string;
+  pass?: {
+    number: string;
+    gate: string;
+    seat: string;
+    departs: string;
+    stripe: string;
+  };
 }
 
 export type SkyMode = 'globe' | 'satellite' | 'flat';
@@ -36,6 +43,7 @@ export interface FocusSettings {
   sky: SkyMode;
   ambient: Ambient;
   aircraft: string;
+  motion?: boolean;
   hintSeen?: boolean;
 }
 

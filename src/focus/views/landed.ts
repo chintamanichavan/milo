@@ -3,12 +3,14 @@ import { now, whenAdvanced } from '../../clock';
 import { toast } from '../../ui/toast';
 import { clock } from '../../ui/time';
 import { checkBadges } from '../achievements';
-import { airport } from '../airports';
+import { airport, KM_TO_MI } from '../airports';
+import { arrivalFor, rankFor, wings, weatherAt } from '../flightkit';
 import { planeGlyph } from '../planes';
 import {
   dayKey,
   hh,
   hoursOn,
+  landedHours,
   loadFocus,
   mins,
   weekHours,
@@ -53,6 +55,23 @@ export function landedView(root: HTMLElement): () => void {
           ? `${airport(flight.from).city} → ${airport(flight.to).city}`
           : 'Nice work'
       }</p>
+      ${
+        flight.from && flight.to
+          ? (() => {
+              const arrival = arrivalFor(state, flight.from, flight.to);
+              return `<div class="panel arrival-card">
+                <p class="tag">Arrival<span id="weather">—</span></p>
+                <h2>${arrival.city}</h2>
+                <p class="line sub">Local time ${arrival.local} · ${arrival.km.toLocaleString('en-US')} km
+                  (${Math.round(arrival.km * KM_TO_MI).toLocaleString('en-US')} mi) flown</p>
+                <p class="line sub">${arrival.lifetimeKm.toLocaleString('en-US')} km all told —
+                  ${arrival.laps.toFixed(2)}× around the Earth</p>
+                <p class="line sub flying">${wings(rankFor(landedHours(state)).name, 34)}
+                  ${rankFor(landedHours(state)).name}</p>
+              </div>`;
+            })()
+          : ''
+      }
       <p class="line sub flying">${planeGlyph(flight.aircraft ?? 'paper', 40)}</p>
       <div class="tally">
         <div><b>${hh(today)}</b><span>today · ${dailyGoalH} h goal</span></div>
@@ -72,6 +91,12 @@ export function landedView(root: HTMLElement): () => void {
     </section>`;
 
   requestAnimationFrame(() => root.querySelector('.done')!.classList.add('sealed'));
+  if (flight.to)
+    void weatherAt(flight.to).then((weather) => {
+      const slot = root.querySelector('#weather');
+      if (slot && weather) slot.textContent = `${weather.label} · ${weather.tempC}°C`;
+      else if (slot) slot.textContent = '';
+    });
   for (const badge of fresh) toast(`${badge.name} earned`, true);
   if (today >= dailyGoalH) toast('Daily goal met', true);
 

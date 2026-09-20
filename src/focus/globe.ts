@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
+
+export type CameraMode = 'chase' | 'wing' | 'orbit' | 'overhead';
+export const CAMERA_MODES: CameraMode[] = ['chase', 'wing', 'orbit', 'overhead'];
 
 export interface GlobeRoute {
   from: Airport;
@@ -9,6 +13,10 @@ export interface GlobeRoute {
 
 export interface GlobeHandle {
   setProgress(t: number): void;
+  setCamera(mode: CameraMode, manual?: boolean): void;
+  cameraMode(): CameraMode;
+  setAircraft(id: string): void;
+  shake(strength?: number): void;
   setRoute(route: GlobeRoute): void;
   lookAt(lat: number, lon: number): void;
   resize(): void;
@@ -23,15 +31,17 @@ const R = 1;
 const VIOLET = new THREE.Color('#a78bfa');
 const SKY = new THREE.Color('#9dc4ff');
 
-function onSphere(lat: number, lon: number, radius = R): THREE.Vector3 {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
+export function llToVec3(lat: number, lon: number, radius = R): THREE.Vector3 {
+  const theta = ((90 - lat) * Math.PI) / 180;
+  const phi = ((lon + 180) * Math.PI) / 180;
   return new THREE.Vector3(
-    -radius * Math.sin(phi) * Math.cos(theta),
-    radius * Math.cos(phi),
+    -radius * Math.cos(phi) * Math.sin(theta),
+    radius * Math.cos(theta),
     radius * Math.sin(phi) * Math.sin(theta),
   );
 }
+
+const onSphere = llToVec3;
 
 /** where the sun is overhead right now */
 export function sunDirection(when: Date): THREE.Vector3 {
@@ -62,6 +72,8 @@ const EARTH_FRAG = `
   uniform sampler2D cloudMap;
   uniform vec3 sunDir;
   uniform float cloudShift;
+  uniform float cloudAmount;
+  uniform float specAmount;
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vViewDir;
@@ -82,7 +94,7 @@ const EARTH_FRAG = `
     // water catches the sun
     float water = texture2D(waterMap, vUv).r;
     vec3 halfVec = normalize(normalize(sunDir) + normalize(vViewDir));
-    float spec = pow(max(dot(normal, halfVec), 0.0), 90.0) * water * 0.55;
+    float spec = pow(max(dot(normal, halfVec), 0.0), 90.0) * water * 0.55 * specAmount;
 
     // city lights: warm, a little bloomed, never grey
     vec3 lights = texture2D(nightMap, vUv).rgb;
@@ -94,8 +106,8 @@ const EARTH_FRAG = `
 
     // cloud layer, with a soft shadow just behind it
     vec2 cloudUv = vec2(vUv.x + cloudShift, vUv.y);
-    float cloud = texture2D(cloudMap, cloudUv).g;
-    float shadow = texture2D(cloudMap, cloudUv - vec2(0.004, 0.0)).g;
+    float cloud = texture2D(cloudMap, cloudUv).g * cloudAmount;
+    float shadow = texture2D(cloudMap, cloudUv - vec2(0.004, 0.0)).g * cloudAmount;
     col *= 1.0 - shadow * 0.25 * dayAmount;
     col = mix(col, mix(vec3(0.08, 0.09, 0.12), vec3(1.0), dayAmount), cloud * 0.55 * (0.35 + dayAmount));
 
@@ -118,10 +130,12 @@ const ATMO_FRAG = `
   varying vec3 vViewDir;
   void main() {
     vec3 normal = normalize(vNormalW);
-    float fres = pow(1.0 - max(dot(normal, normalize(vViewDir)), 0.0), 3.0);
-    float lit = smoothstep(-0.55, 0.35, dot(normal, normalize(sunDir)));
-    vec3 col = mix(tint, glow, lit) * fres * (0.35 + lit * 1.25);
-    gl_FragColor = vec4(col, fres * (0.20 + lit * 0.75));
+    // soft and wide at the limb, fading inward
+    float rim = 1.0 - max(dot(normal, normalize(vViewDir)), 0.0);
+    float fres = pow(rim, 2.1) * 0.75 + pow(rim, 5.0) * 0.9;
+    float lit = smoothstep(-0.5, 0.45, dot(normal, normalize(sunDir)));
+    vec3 col = mix(tint * 0.55 + vec3(0.10, 0.16, 0.30), glow, lit) * fres * (0.5 + lit * 1.6);
+    gl_FragColor = vec4(col, fres * (0.25 + lit * 0.9));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -169,6 +183,7 @@ export interface GlobeOptions {
   interactive?: boolean;
   route?: GlobeRoute;
   showPlane?: boolean;
+  aircraft?: string;
   now?: () => Date;
   /** dolly in from far away when a flight begins */
   flyIn?: boolean;
@@ -179,6 +194,7 @@ export async function createGlobe(
   options: GlobeOptions = {},
 ): Promise<GlobeHandle> {
   const { interactive = false, showPlane = false, flyIn = false } = options;
+  let aircraftId = options.aircraft ?? 'paper';
   const clock = options.now ?? (() => new Date());
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -234,6 +250,8 @@ export async function createGlobe(
         cloudMap: { value: cloudMap },
         sunDir,
         cloudShift,
+        cloudAmount: { value: 1 },
+        specAmount: { value: 1 },
       },
       vertexShader: VERT,
       fragmentShader: EARTH_FRAG,
@@ -242,7 +260,7 @@ export async function createGlobe(
   scene.add(earth);
 
   const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(R * 1.028, 64, 48),
+    new THREE.SphereGeometry(R * 1.06, 64, 48),
     new THREE.ShaderMaterial({
       uniforms: { glow: { value: SKY }, tint: { value: VIOLET }, sunDir },
       vertexShader: VERT,
@@ -295,6 +313,11 @@ export async function createGlobe(
   );
   scene.add(flown, ahead);
 
+  const leaderMat = new THREE.LineBasicMaterial({ color: 0x9aa3a9, transparent: true, opacity: 0.5 });
+  const leaderFrom = new THREE.Line(new THREE.BufferGeometry(), leaderMat);
+  const leaderTo = new THREE.Line(new THREE.BufferGeometry(), leaderMat.clone());
+  scene.add(leaderFrom, leaderTo);
+
   const pinGeo = new THREE.SphereGeometry(0.014, 16, 16);
   const pinFrom = new THREE.Mesh(pinGeo, new THREE.MeshBasicMaterial({ color: 0xcfd6db }));
   const pinTo = new THREE.Mesh(pinGeo, new THREE.MeshBasicMaterial({ color: VIOLET }));
@@ -303,12 +326,15 @@ export async function createGlobe(
   let labelTo = labelSprite('', '#c9b6ff');
   scene.add(labelFrom, labelTo);
 
-  const plane = new THREE.Mesh(
-    new THREE.ConeGeometry(0.026, 0.075, 4),
-    new THREE.MeshBasicMaterial({ color: 0xf3edff }),
-  );
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const sunLight = new THREE.DirectionalLight(0xfff3e0, 2.2);
+  scene.add(sunLight);
+
+  const plane = new THREE.Group();
   plane.visible = showPlane;
   scene.add(plane);
+  let model: Plane3D = buildAircraft(aircraftId);
+  plane.add(model.group);
 
   // exhaust: forty points that fade out behind the plane
   const TRAIL = 40;
@@ -358,7 +384,14 @@ export async function createGlobe(
     }
     const curve = new THREE.CatmullRomCurve3(points);
     flown.geometry.dispose();
-    flown.geometry = new THREE.TubeGeometry(curve, SEGMENTS, 0.0065, 8, false);
+    const { back } = fitRoute();
+    flown.geometry = new THREE.TubeGeometry(
+      curve,
+      SEGMENTS,
+      THREE.MathUtils.clamp(back * 0.006, 0.0012, 0.008),
+      8,
+      false,
+    );
     ahead.geometry.dispose();
     ahead.geometry = new THREE.BufferGeometry().setFromPoints(points);
     ahead.computeLineDistances();
@@ -369,12 +402,14 @@ export async function createGlobe(
     scene.remove(labelFrom, labelTo);
     labelFrom = labelSprite(next.from.iata, '#cfd6db');
     labelTo = labelSprite(`${next.to.iata} · ${next.to.city}`, '#c9b6ff');
-    labelFrom.position.copy(a.clone().multiplyScalar(1.06));
-    labelTo.position.copy(b.clone().multiplyScalar(1.1));
+    labelFrom.position.copy(a.clone().multiplyScalar(1.055));
+    labelTo.position.copy(b.clone().multiplyScalar(1.075));
     // on a short hop the two labels would sit on top of each other
     labelFrom.visible = angle > 0.17;
     labelTo.scale.set(0.48, 0.089, 1);
     scene.add(labelFrom, labelTo);
+    leaderFrom.geometry.setFromPoints([a.clone().multiplyScalar(1.005), a.clone().multiplyScalar(1.05)]);
+    leaderTo.geometry.setFromPoints([b.clone().multiplyScalar(1.005), b.clone().multiplyScalar(1.07)]);
     frameRoute();
   }
 
@@ -395,6 +430,25 @@ export async function createGlobe(
     return (R * margin) / Math.sin(Math.min(halfV, halfH));
   }
 
+  /** the arc's own bounding sphere, so short hops fill the frame too */
+  function routeBounds(): { centre: THREE.Vector3; radius: number } {
+    if (points.length === 0) return { centre: new THREE.Vector3(0, 0, R), radius: R };
+    const centre = new THREE.Vector3();
+    for (const p of points) centre.add(p);
+    centre.divideScalar(points.length);
+    let radius = 0;
+    for (const p of points) radius = Math.max(radius, p.distanceTo(centre));
+    return { centre, radius: Math.max(0.06, radius) };
+  }
+
+  /** how far back the camera must sit to hold the whole arc, with a quarter margin */
+  function fitRoute(): { centre: THREE.Vector3; back: number } {
+    const halfV = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const halfH = Math.atan(Math.tan(halfV) * camera.aspect);
+    const { centre, radius } = routeBounds();
+    return { centre, back: (radius * 1.25) / Math.sin(Math.min(halfV, halfH)) };
+  }
+
   function routeDistance(): number {
     const fit = fitDistance();
     if (!route) return fit;
@@ -405,6 +459,16 @@ export async function createGlobe(
     return Math.max(fit, fitDistance(1.05 + angle * 0.4));
   }
 
+  let cameraMode: CameraMode = 'chase';
+  let manualUntil = 0;
+  let cutStart = 0;
+  const cutFrom = new THREE.Vector3();
+  let lastCycle = Date.now();
+  let shakeUntil = 0;
+  let shakeAmount = 0;
+  /** the ground-truth tests park the camera and expect it to stay put */
+  let frozen = false;
+
   /** Keep the flight in frame, but lean towards the sun so the terminator shows. */
   const MAX_LEAN = THREE.MathUtils.degToRad(52);
 
@@ -413,14 +477,53 @@ export async function createGlobe(
     const here = at.clone().normalize();
     const sun = sunDir.value.clone().normalize();
     const between = here.angleTo(sun);
-    // never turn further from the route than MAX_LEAN, however dark it is there
     const lean = between > 1e-3 ? Math.min(1, MAX_LEAN / between) : 0;
-    const dir = here.clone().lerp(sun, lean).normalize();
-    dir.add(tangent.clone().multiplyScalar(0.1)).normalize();
-    // ease back out as the flight lands
+    const lit = here.clone().lerp(sun, lean).normalize();
     const landing = progress > 0.96 ? 1 + (progress - 0.96) * 3 : 1;
+    const side = tangent.clone().cross(here).normalize();
+
+    if (showPlane && cameraMode === 'chase') {
+      // the whole route in frame, seen from behind and above the aircraft
+      const { centre, back } = fitRoute();
+      const dir = centre
+        .clone()
+        .normalize()
+        .multiplyScalar(1.15)
+        .add(tangent.clone().multiplyScalar(-0.5))
+        .add(lit.clone().multiplyScalar(0.25))
+        .normalize();
+      desired.copy(centre.clone().normalize().multiplyScalar(centre.length())).add(dir.multiplyScalar(back));
+      desiredTarget.copy(centre);
+      return;
+    }
+    if (showPlane && cameraMode === 'overhead') {
+      const { centre, back } = fitRoute();
+      desired.copy(centre.clone().normalize().multiplyScalar(centre.length() + back));
+      desiredTarget.copy(centre);
+      return;
+    }
+    if (!showPlane || cameraMode === 'orbit') {
+      const dir = lit.clone().add(tangent.clone().multiplyScalar(0.1)).normalize();
+      desired.copy(dir).multiplyScalar(distance * landing);
+      desiredTarget.copy(here).multiplyScalar(-0.12);
+      return;
+    }
+    if (cameraMode === 'wing') {
+      // out along the wing: the aircraft near, the route still across the frame
+      const { centre, back } = fitRoute();
+      const dir = side
+        .clone()
+        .multiplyScalar(0.9)
+        .add(here.clone().multiplyScalar(1.1))
+        .add(lit.clone().multiplyScalar(0.2))
+        .normalize();
+      desired.copy(at.clone().normalize().multiplyScalar(at.length())).add(dir.multiplyScalar(back * 0.9));
+      desiredTarget.copy(centre).lerp(at, 0.35);
+      return;
+    }
+    // orbit: the planet entire, the flight a bright thread across it
+    const dir = lit.clone().add(tangent.clone().multiplyScalar(0.1)).normalize();
     desired.copy(dir).multiplyScalar(distance * landing);
-    // golden-ratio framing: the globe sits a little off centre
     desiredTarget.copy(here).multiplyScalar(-0.12);
   }
 
@@ -454,8 +557,11 @@ export async function createGlobe(
     const here = points[i];
     const next = points[i + 1];
     plane.position.copy(here);
-    plane.lookAt(next);
-    plane.rotateX(Math.PI / 2);
+    plane.up.copy(here);
+    plane.lookAt(next.clone().multiplyScalar(1.001));
+    // hold the aircraft at a readable size however close the camera is
+    const toCamera = camera.position.distanceTo(here);
+    plane.scale.setScalar(THREE.MathUtils.clamp(toCamera * 0.016, 0.004, 0.06));
     const drawn = Math.max(6, Math.floor(progress * SEGMENTS) * 8 * 6);
     flown.geometry.setDrawRange(0, drawn);
     ahead.geometry.setDrawRange(i, points.length - i);
@@ -482,39 +588,71 @@ export async function createGlobe(
 
   function render(now = performance.now()): void {
     sunDir.value = sunDirection(clock());
+    sunLight.position.copy(sunDir.value.clone().multiplyScalar(12));
+    model.update(now / 1000, progress);
+
+    // the view changes itself every forty seconds unless you chose one
+    if (showPlane && Date.now() > manualUntil && Date.now() - lastCycle > 40_000) {
+      lastCycle = Date.now();
+      cameraMode = CAMERA_MODES[(CAMERA_MODES.indexOf(cameraMode) + 1) % CAMERA_MODES.length];
+      cutFrom.copy(camera.position);
+      cutStart = now;
+    }
     cloudShift.value = (cloudShift.value + 0.000006) % 1;
     starTime.value = now / 1000;
     if (showPlane) placePlane();
 
     // a two and a half second dolly in from a far shot, then cruise
     const introT = flyIn ? Math.min(1, (now - introStart) / INTRO_MS) : 1;
+    if (frozen) {
+      controls?.update();
+      renderer.render(scene, camera);
+      return;
+    }
     if (introT < 1) {
       const eased = (1 - introT) ** 3;
       camera.position.copy(desired.clone().multiplyScalar(1 + eased * 2.2));
+      camera.lookAt(desiredTarget);
+    } else if (now - cutStart < 1200) {
+      // a cut eases over 1.2 s, whatever the frame rate
+      const k = 1 - (1 - (now - cutStart) / 1200) ** 3;
+      camera.position.copy(cutFrom.clone().lerp(desired, k));
       camera.lookAt(desiredTarget);
     } else if (Date.now() - lastTouch > 5000) {
       const want = desired.length();
       const dir = camera.position
         .clone()
         .normalize()
-        .lerp(desired.clone().normalize(), showPlane ? 0.03 : 0.08)
+        .lerp(desired.clone().normalize(), 0.08)
         .normalize();
-      const radius = THREE.MathUtils.lerp(camera.position.length(), want, 0.08);
+      const radius = THREE.MathUtils.lerp(camera.position.length(), want, 0.1);
       camera.position.copy(dir.multiplyScalar(radius));
       camera.lookAt(desiredTarget);
     }
-    // labels on the far side fade away rather than floating over the disc
-    for (const [sprite, pin] of [
-      [labelFrom, pinFrom],
-      [labelTo, pinTo],
-    ] as [THREE.Sprite, THREE.Mesh][]) {
+    // labels fade on the far side and hold a steady size, however close the camera gets
+    for (const [sprite, pin, width] of [
+      [labelFrom, pinFrom, 0.115],
+      [labelTo, pinTo, 0.15],
+    ] as [THREE.Sprite, THREE.Mesh, number][]) {
       const facing = pin.position.clone().normalize().dot(camera.position.clone().normalize());
       (sprite.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.clamp(
         (facing - 0.1) * 3,
         0,
         1,
       );
+      const toPin = camera.position.distanceTo(pin.position);
+      const size = THREE.MathUtils.clamp(toPin * width, 0.06, 0.7);
+      sprite.scale.set(size, size * 0.1875, 1);
+      pin.scale.setScalar(THREE.MathUtils.clamp(toPin * 0.5, 0.25, 2.2));
     }
+    // turbulence shakes the aircraft, never the UI
+    if (now < shakeUntil) {
+      const k = shakeAmount * (shakeUntil - now) / 900;
+      plane.position.add(new THREE.Vector3((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, 0));
+      plane.rotation.z += (Math.random() - 0.5) * k * 2;
+    }
+    // OrbitControls aims the camera itself, so it has to share our target
+    if (controls) controls.target.copy(desiredTarget);
     controls?.update();
     renderer.render(scene, camera);
   }
@@ -548,6 +686,62 @@ export async function createGlobe(
   resize();
   raf = requestAnimationFrame(loop);
 
+  if (new URLSearchParams(location.search).has('test'))
+    (window as unknown as { __milo: unknown }).__milo = {
+      /** where a place lands on screen, in CSS pixels */
+      project(lat: number, lon: number) {
+        const v = llToVec3(lat, lon).project(camera);
+        const rect = host.getBoundingClientRect();
+        return {
+          x: rect.left + ((v.x + 1) / 2) * rect.width,
+          y: rect.top + ((1 - v.y) / 2) * rect.height,
+          visible: llToVec3(lat, lon).normalize().dot(camera.position.clone().normalize()) > 0,
+        };
+      },
+      /** point the camera straight down at a place, for ground-truth checks */
+      centreOn(lat: number, lon: number) {
+        frozen = true;
+        manualUntil = Date.now() + 600_000;
+        const at = llToVec3(lat, lon);
+        camera.position.copy(at.clone().normalize().multiplyScalar(fitDistance(1.02)));
+        camera.lookAt(0, 0, 0);
+        render();
+      },
+      sunDirection: () => sunDirection(clock()).toArray(),
+      projectVec: (x: number, y: number, z: number) => {
+        const v = new THREE.Vector3(x, y, z).project(camera);
+        const rect = host.getBoundingClientRect();
+        return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
+      },
+      camera: () => ({
+        pos: camera.position.toArray(),
+        desired: desired.toArray(),
+        target: desiredTarget.toArray(),
+        mode: cameraMode,
+      }),
+      setCamera: (mode: CameraMode) => {
+        cameraMode = mode;
+        manualUntil = Date.now() + 600_000;
+        lastTouch = 0;
+        placePlane();
+        camera.position.copy(desired);
+        camera.lookAt(desiredTarget);
+        render();
+      },
+      /** strip the sky back to bare texture, for ground-truth checks */
+      setLayers({
+        clouds: withClouds = true,
+        atmosphere: withAtmosphere = true,
+        specular: withSpecular = true,
+      }) {
+        const uniforms = (earth.material as THREE.ShaderMaterial).uniforms;
+        uniforms.cloudAmount.value = withClouds ? 1 : 0;
+        uniforms.specAmount.value = withSpecular ? 1 : 0;
+        atmosphere.visible = withAtmosphere;
+        render();
+      },
+    };
+
   // battery saver drops the frame rate
   void (navigator as unknown as { getBattery?: () => Promise<{ charging: boolean; level: number }> })
     .getBattery?.()
@@ -557,6 +751,23 @@ export async function createGlobe(
     .catch(() => {});
 
   return {
+    setCamera(mode, manual = false) {
+      cameraMode = mode;
+      if (manual) manualUntil = Date.now() + 120_000;
+      cutFrom.copy(camera.position);
+      cutStart = performance.now();
+    },
+    cameraMode: () => cameraMode,
+    setAircraft(id) {
+      aircraftId = id;
+      plane.remove(model.group);
+      model = buildAircraft(id);
+      plane.add(model.group);
+    },
+    shake(strength = 1) {
+      shakeUntil = performance.now() + 900 * strength;
+      shakeAmount = 0.02 * strength;
+    },
     setProgress(t) {
       progress = Math.max(0, Math.min(1, t));
       if (!running) {

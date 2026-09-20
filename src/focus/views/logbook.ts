@@ -16,7 +16,9 @@ const dayLabel = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
 const leg = (from?: string, to?: string): string =>
-  from && to ? `${from} → ${to}` : 'local hop';
+  from && to
+    ? `${from} → ${to}<span class="cityname"> · ${airport(from).city} to ${airport(to).city}</span>`
+    : 'local hop';
 
 /** Day-grouped flights; tap one to edit it. */
 export function flightRows(state: FocusState): string {

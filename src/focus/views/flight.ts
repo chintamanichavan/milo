@@ -1,9 +1,24 @@
 import { beep, say, stopSpeech } from '../../audio';
+import { toast } from '../../ui/toast';
 import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
 import { clock } from '../../ui/time';
-import { planRoute } from '../airports';
-import { setAmbientVolume, startAmbientFromSettings, stopAmbient } from '../ambient';
+import { KM_TO_MI, localTime, planRoute } from '../airports';
+import {
+  announcement,
+  boardingPass,
+  MID_FLIGHT,
+  PHASE_LABEL,
+  phaseAt,
+  type Phase,
+} from '../flightkit';
+import {
+  duckAmbient,
+  setAmbientVolume,
+  setEnginePower,
+  startAmbientFromSettings,
+  stopAmbient,
+} from '../ambient';
 import {
   addFlight,
   lastAirport,
@@ -13,6 +28,7 @@ import {
   type SkyMode,
 } from '../store';
 import { createSky, type Sky } from '../sky';
+import type { CameraMode } from '../globe';
 import { setLanding } from './landed';
 
 const HOLD_MS = 800;
@@ -32,6 +48,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   const showHint = !settings.hintSeen;
   if (showHint) setFocusSettings({ hintSeen: true });
   const route = planRoute(lastAirport(state), minutes, String(state.flights.length));
+  const pass = boardingPass(route.from, route.to, minutes, label);
   const grace = settings.strict ? 0 : GRACE_MS;
 
   const startedAt = now();
@@ -40,12 +57,44 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   root.innerHTML = `
     <section class="flight" id="stage" data-progress="0" tabindex="0" role="button"
       aria-label="Hold anywhere to divert">
-      <div class="sky-stage"><div class="sky-host stage" id="sky"></div><div class="sky-fade"></div></div>
+      <div class="sky-stage">
+        <div class="sky-host stage" id="sky"></div>
+        <div class="pip" id="pip" hidden>
+          <svg viewBox="0 0 120 70" width="110" height="64" aria-label="route tracker">
+            <path id="pipArc" d="M12 54 Q60 12 108 54" fill="none" stroke="currentColor"
+              stroke-width="1" stroke-dasharray="3 3" opacity=".55"/>
+            <path id="pipFlown" d="M12 54 Q60 12 108 54" fill="none" stroke="currentColor"
+              stroke-width="2" pathLength="1"/>
+            <circle cx="12" cy="54" r="2.4" fill="currentColor" opacity=".7"/>
+            <circle cx="108" cy="54" r="2.8" fill="currentColor"/>
+            <circle id="pipPlane" cx="12" cy="54" r="3.4" fill="#fff"/>
+            <text x="12" y="66" font-size="8" fill="currentColor" text-anchor="middle"
+              font-family="ui-monospace,monospace">${route.from.iata}</text>
+            <text x="108" y="66" font-size="8" fill="currentColor" text-anchor="middle"
+              font-family="ui-monospace,monospace">${route.to.iata}</text>
+          </svg>
+        </div>
+        <div class="sky-fade"></div>
+      </div>
+      <div class="strip">
+        <div class="strip-line">
+          <b>${route.from.iata}</b>
+          <i class="strip-track"><span class="strip-flown" id="stripFlown"></span>
+            <span class="strip-plane" id="stripPlane">✈</span></i>
+          <b>${route.to.iata}</b>
+        </div>
+        <div class="strip-figures">
+          <span id="flownKm">0 km</span>
+          <span id="leftKm">${route.km.toLocaleString('en-US')} km left</span>
+          <span id="eta">ETA —</span>
+        </div>
+      </div>
       <header class="run-head">
         <span class="tag">${route.from.iata} → ${route.to.iata} · ${Math.round(
           plannedSec / 60,
         )}′</span>
         <span class="head-tools">
+          <button class="link tap" id="camBtn">view</button>
           <button class="link tap" id="skyBtn">${settings.sky}</button>
           <button class="link tap" id="soundBtn">sound</button>
         </span>
@@ -53,13 +102,16 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       <div class="stage-mid">
         <div class="count" id="count">${clock(plannedSec)}</div>
         <div class="next" id="dest">${label || 'focus'}</div>
+        <p class="tag phase" id="phase">taxiing</p>
         <p class="tag arrival">lands ${landsAt.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
         })} · ${route.to.city}</p>
+        <p class="tag clocks"><span id="clockFrom">${route.from.iata} ${localTime(route.from)}</span>
+          <span id="clockTo">${route.to.iata} ${localTime(route.to)}</span></p>
       </div>
       <footer class="run-foot">
-        <div class="track one"><i class="fill" id="fill"></i><i class="marker" id="marker"></i></div>
+        <div class="track one"><i class="fill" id="fill"></i><i class="marker plane-marker" id="marker"></i></div>
         <div class="meta"><span id="elapsed">0:00</span><span>${clock(plannedSec)} planned</span></div>
         <p class="hint" id="hint">${showHint ? 'hold anywhere to divert' : ''}</p>
       </footer>
@@ -75,6 +127,12 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   const noteEl = root.querySelector<HTMLElement>('#note')!;
   const liveEl = root.querySelector<HTMLElement>('#live')!;
   const skyBtn = root.querySelector<HTMLElement>('#skyBtn')!;
+  const pip = root.querySelector<HTMLElement>('#pip')!;
+  const pipFlown = root.querySelector<SVGPathElement>('#pipFlown')!;
+  const pipPlane = root.querySelector<SVGCircleElement>('#pipPlane')!;
+  const pipArc = root.querySelector<SVGPathElement>('#pipArc')!;
+  const stripFlown = root.querySelector<HTMLElement>('#stripFlown')!;
+  const stripPlane = root.querySelector<HTMLElement>('#stripPlane')!;
 
   let sky: Sky | null = null;
   let mode: SkyMode = settings.sky;
@@ -83,16 +141,34 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     sky?.dispose();
     sky = await createSky(
       root.querySelector<HTMLElement>('#sky')!,
-      { route, showPlane: true, interactive: true, flyIn: true, now: sunClock },
+      {
+        route,
+        showPlane: true,
+        interactive: true,
+        flyIn: true,
+        now: sunClock,
+        aircraft: settings.aircraft,
+      },
       next,
     );
     skyBtn.textContent = sky.mode;
     sky.setProgress(Math.min(1, elapsed() / plannedSec));
   }
 
+  const CAMERAS: CameraMode[] = ['chase', 'wing', 'orbit', 'overhead'];
+  let camIndex = 0;
   let done = false;
   let halfway = false;
   let hiddenAt = 0;
+  let phase: Phase | '' = '';
+  const phaseEl = () => root.querySelector<HTMLElement>('#phase');
+
+  const speak = (line: string): void => {
+    duckAmbient(true, settings.ambient.volume);
+    say(line);
+    liveEl.textContent = line;
+    window.setTimeout(() => duckAmbient(false, settings.ambient.volume), 3200);
+  };
 
   const elapsed = (): number => (now() - startedAt) / 1000;
 
@@ -109,6 +185,13 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       from: route.from.iata,
       to: outcome === 'landed' ? route.to.iata : route.from.iata,
       aircraft: settings.aircraft,
+      pass: {
+        number: pass.number,
+        gate: pass.gate,
+        seat: pass.seat,
+        departs: pass.departs,
+        stripe: pass.stripe,
+      },
     };
     addFlight(flight);
     if (outcome === 'landed') {
@@ -128,10 +211,49 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     markerEl.style.left = `${t * 100}%`;
     stage.dataset.progress = String(Math.round(t * 100));
     sky?.setProgress(t);
-    if (!halfway && plannedSec >= 3000 && e >= plannedSec / 2) {
+
+    // the tracking never disappears: strip below, inset when the camera is close in
+    stripFlown.style.width = `${t * 100}%`;
+    stripPlane.style.left = `${t * 100}%`;
+    const flownKm = Math.round(route.km * t);
+    root.querySelector('#flownKm')!.textContent = `${flownKm.toLocaleString('en-US')} km · ${Math.round(
+      flownKm * KM_TO_MI,
+    ).toLocaleString('en-US')} mi`;
+    root.querySelector('#leftKm')!.textContent = `${Math.round(
+      route.km - flownKm,
+    ).toLocaleString('en-US')} km left`;
+    root.querySelector('#eta')!.textContent = `ETA ${localTime(
+      route.to,
+      new Date(Date.now() + (plannedSec - e) * 1000),
+    )}`;
+    pipFlown.style.strokeDasharray = `${t} 1`;
+    const at = pipArc.getPointAtLength(pipArc.getTotalLength() * t);
+    pipPlane.setAttribute('cx', String(at.x));
+    pipPlane.setAttribute('cy', String(at.y));
+    const live = sky?.cameraMode?.() ?? CAMERAS[camIndex];
+    pip.hidden = !['chase', 'wing'].includes(live);
+
+    const nextPhase = phaseAt(t);
+    if (nextPhase !== phase) {
+      phase = nextPhase;
+      const label = phaseEl();
+      if (label) label.textContent = PHASE_LABEL[nextPhase];
+      stage.dataset.phase = nextPhase;
+      speak(announcement(nextPhase, route.to.city));
+      if (nextPhase === 'landing') beep('chime');
+      // engines: loud on the roll, soft at altitude
+      setEnginePower(nextPhase === 'takeoff' ? 1 : nextPhase === 'climb' ? 0.7 : nextPhase === 'descent' ? 0.4 : 0.25);
+    }
+    if (Math.round(e) % 30 === 0) {
+      const from = root.querySelector('#clockFrom');
+      const to = root.querySelector('#clockTo');
+      if (from) from.textContent = `${route.from.iata} ${localTime(route.from)}`;
+      if (to) to.textContent = `${route.to.iata} ${localTime(route.to)}`;
+    }
+    if (!halfway && e >= plannedSec / 2) {
       halfway = true;
       beep('chime');
-      liveEl.textContent = 'Halfway there';
+      speak(MID_FLIGHT);
     }
     if (hiddenAt && now() - hiddenAt >= grace) record('diverted', (hiddenAt - startedAt) / 1000);
     if (e >= plannedSec) record('landed', plannedSec);
@@ -152,6 +274,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     hiddenAt = 0;
     if (away >= grace) return record('diverted', wentAt);
     noteEl.hidden = false;
+    sky?.shake?.(1);
     window.setTimeout(() => (noteEl.hidden = true), 2000);
   };
   document.addEventListener('visibilitychange', onVisible);
@@ -171,6 +294,12 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     stage.addEventListener(evt, holdEnd);
   stage.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') record('diverted', elapsed());
+  });
+
+  root.querySelector<HTMLElement>('#camBtn')!.addEventListener('click', () => {
+    camIndex = (camIndex + 1) % CAMERAS.length;
+    sky?.setCamera?.(CAMERAS[camIndex], true);
+    toast(`${CAMERAS[camIndex]} view`);
   });
 
   skyBtn.addEventListener('click', () => {
@@ -217,6 +346,22 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     });
   });
 
+  // 74. the phone moving is turbulence, if the reader allows motion events
+  let lastMotion = 0;
+  const onMotion = (ev: DeviceMotionEvent): void => {
+    const a = ev.accelerationIncludingGravity;
+    if (!a) return;
+    const force = Math.abs((a.x ?? 0) + (a.y ?? 0) + (a.z ?? 0) - 9.8);
+    if (force > 6 && Date.now() - lastMotion > 6000) {
+      lastMotion = Date.now();
+      sky?.shake?.(Math.min(2, force / 8));
+      noteEl.textContent = 'turbulence — keep the phone down';
+      noteEl.hidden = false;
+      window.setTimeout(() => (noteEl.hidden = true), 2200);
+    }
+  };
+  if (settings.motion) window.addEventListener('devicemotion', onMotion);
+
   let dimAt = Date.now() + 10_000;
   const wake = (): void => {
     dimAt = Date.now() + 10_000;
@@ -257,6 +402,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     clearTimeout(holdTimer);
     whenAdvanced(null);
     document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('devicemotion', onMotion);
     for (const evt of ['pointerdown', 'keydown'] as const)
       document.removeEventListener(evt, wake, true);
     document.body.classList.remove('dim');

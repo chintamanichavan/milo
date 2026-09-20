@@ -1,11 +1,13 @@
 import { loadFocus } from './store';
 
-type Sound = 'off' | 'cabin' | 'rain' | 'cafe';
+export type Sound = 'off' | 'cabin' | 'rain' | 'cafe' | 'engine';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let nodes: AudioNode[] = [];
 let playing: Sound = 'off';
+let engine: { low: BiquadFilterNode; whine: GainNode; osc: OscillatorNode } | null = null;
+let ducked = false;
 
 function noiseBuffer(context: AudioContext, brown: boolean): AudioBuffer {
   const length = context.sampleRate * 3;
@@ -74,6 +76,22 @@ export function startAmbient(sound: Sound, volume: number): void {
     drops.start();
     lfo.start();
     nodes = [drops, lfo];
+  } else if (sound === 'engine') {
+    const roar = source(ctx, true);
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.value = 160;
+    const whine = ctx.createOscillator();
+    whine.type = 'sawtooth';
+    whine.frequency.value = 92;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.02;
+    roar.connect(low).connect(master);
+    whine.connect(whineGain).connect(master);
+    roar.start();
+    whine.start();
+    engine = { low, whine: whineGain, osc: whine };
+    nodes = [roar, whine];
   } else {
     const murmur = source(ctx, true);
     const low = ctx.createBiquadFilter();
@@ -101,7 +119,21 @@ export function startAmbient(sound: Sound, volume: number): void {
 }
 
 export function setAmbientVolume(volume: number): void {
-  if (master) master.gain.value = volume;
+  if (master) master.gain.value = ducked ? volume * 0.35 : volume;
+}
+
+/** engines are loud on the roll and soft at altitude */
+export function setEnginePower(power: number): void {
+  if (!engine || !ctx) return;
+  engine.low.frequency.setTargetAtTime(120 + power * 220, ctx.currentTime, 0.4);
+  engine.whine.gain.setTargetAtTime(0.012 + power * 0.05, ctx.currentTime, 0.4);
+  engine.osc.frequency.setTargetAtTime(70 + power * 90, ctx.currentTime, 0.4);
+}
+
+/** the cabin drops away while the captain talks */
+export function duckAmbient(on: boolean, volume: number): void {
+  ducked = on;
+  if (master && ctx) master.gain.setTargetAtTime(on ? volume * 0.3 : volume, ctx.currentTime, 0.2);
 }
 
 export function stopAmbient(): void {
@@ -114,6 +146,7 @@ export function stopAmbient(): void {
     node.disconnect();
   }
   nodes = [];
+  engine = null;
   master?.disconnect();
   master = null;
   playing = 'off';

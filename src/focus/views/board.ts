@@ -1,12 +1,21 @@
 import { unlockAudio } from '../../audio';
 import { miloMark } from '../../badge';
 import { sheet } from '../../ui/sheet';
-import { planRoute } from '../airports';
+import { airport, planRoute } from '../airports';
+import {
+  boardingPass,
+  nextRank,
+  rankFor,
+  splitFlap,
+  wings,
+  type BoardRow,
+} from '../flightkit';
 import { planeGlyph } from '../planes';
 import {
   colourOf,
   dayKey,
   hh,
+  landedHours,
   hoursOn,
   lastAirport,
   loadFocus,
@@ -61,6 +70,31 @@ function weekStrip(state: FocusState): string {
     <div class="bars">${bars}</div></div>`;
 }
 
+/** 75. today's flights, on a split-flap board */
+function departuresBoard(state: FocusState, next: { from: { iata: string }; to: { iata: string; city: string } }, minutes: number): string {
+  const today = dayKey(new Date());
+  const rows: BoardRow[] = state.flights
+    .filter((f) => dayKey(f.start) === today)
+    .slice(-5)
+    .map((f) => ({
+      time: new Date(f.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      flight: f.pass?.number ?? 'MLO ---',
+      to: f.to ?? '---',
+      purpose: (f.label || 'focus').slice(0, 10),
+      status: f.outcome === 'landed' ? 'landed' : f.outcome === 'aborted' ? 'left' : 'diverted',
+    }));
+  rows.push({
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+    flight: boardingPass(airport(next.from.iata), airport(next.to.iata), minutes, '').number,
+    to: next.to.iata,
+    purpose: 'next',
+    status: 'boarding',
+  });
+  return `<div class="panel departures"><p class="tag">Departures<span class="cityname">${
+    next.from.iata
+  } ${airport(next.from.iata).city} → ${next.to.iata} ${next.to.city}</span></p>${splitFlap(rows)}</div>`;
+}
+
 export function focusBoardView(root: HTMLElement): () => void {
   const state = loadFocus();
   const { defaultMin, dailyGoalH, weeklyGoalH, aircraft } = state.settings;
@@ -109,8 +143,15 @@ export function focusBoardView(root: HTMLElement): () => void {
         <button class="big tap" data-done="1" id="takeoff">TAKE OFF</button>
         <p class="line sub mid flying">${planeGlyph(aircraft, 40)}<span>flying the ${
           aircraft === 'paper' ? 'paper plane' : aircraft
+        }</span>${wings(rankFor(landedHours(state)).name, 34)}<span>${
+          rankFor(landedHours(state)).name
+        }${
+          nextRank(landedHours(state))
+            ? ` · ${(nextRank(landedHours(state))!.hours - landedHours(state)).toFixed(1)} h to ${nextRank(landedHours(state))!.name}`
+            : ''
         }</span></p>
       </div>
+      ${departuresBoard(state, route, minutes)}
       ${weekStrip(state)}
       <div class="hist">
         <p class="tag">Logbook<button class="link tap" id="manual">Add a flight</button></p>
@@ -166,7 +207,46 @@ export function focusBoardView(root: HTMLElement): () => void {
     unlockAudio();
     const m = Math.min(300, Math.max(1, Math.round(minutes)));
     setFocusSettings({ defaultMin: m });
-    location.hash = `#/focus/flight/${m}/${encodeURIComponent(destEl.value.trim())}`;
+    const purpose = destEl.value.trim();
+    const pass = boardingPass(route.from, route.to, m, purpose);
+    const host = sheet(
+      'Boarding pass',
+      `<div class="pass" id="pass">
+        <div class="pass-main">
+          <p class="tag">${pass.number} · ${pass.departs}</p>
+          <div class="pass-route">
+            <div><b>${route.from.iata}</b><span>${route.from.city}</span></div>
+            <i class="pass-arrow">✈</i>
+            <div><b>${route.to.iata}</b><span>${route.to.city}</span></div>
+          </div>
+          <div class="pass-grid">
+            <div><span class="tag">gate</span><b>${pass.gate}</b></div>
+            <div><span class="tag">seat</span><b>${pass.seat}</b></div>
+            <div><span class="tag">duration</span><b>${m}′</b></div>
+          </div>
+          <p class="tag">purpose · ${pass.purpose}</p>
+        </div>
+        <div class="pass-tear"></div>
+        <div class="pass-stub">
+          <p class="tag">${pass.number}</p>
+          <div class="barcode">${pass.stripe
+            .split(',')
+            .map((w) => `<i style="width:${w}px"></i>`)
+            .join('')}</div>
+          <p class="tag">tear to board</p>
+        </div>
+      </div>
+      <button class="big tap" id="board">TEAR THE STUB</button>`,
+    );
+    const tear = (): void => {
+      host.querySelector('#pass')!.classList.add('torn');
+      window.setTimeout(() => {
+        (host as HTMLElement & { close: () => void }).close();
+        location.hash = `#/focus/flight/${m}/${encodeURIComponent(purpose)}`;
+      }, 620);
+    };
+    host.querySelector('#board')!.addEventListener('click', tear);
+    host.querySelector('.pass-stub')!.addEventListener('click', tear);
   });
 
   root.querySelector<HTMLElement>('.hist')!.addEventListener('click', (ev) => {

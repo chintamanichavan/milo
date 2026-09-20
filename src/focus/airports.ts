@@ -6,6 +6,8 @@ export interface Airport {
   lat: number;
   lon: number;
   continent: Continent;
+  /** hours from UTC, for the clocks */
+  tz: number;
 }
 
 const A = (
@@ -14,59 +16,60 @@ const A = (
   lat: number,
   lon: number,
   continent: Continent,
-): Airport => ({ iata, city, lat, lon, continent });
+  tz: number,
+): Airport => ({ iata, city, lat, lon, continent, tz });
 
 export const AIRPORTS: Airport[] = [
-  A('ORD', 'Chicago', 41.98, -87.9, 'NA'),
-  A('JFK', 'New York', 40.64, -73.78, 'NA'),
-  A('LAX', 'Los Angeles', 33.94, -118.41, 'NA'),
-  A('SFO', 'San Francisco', 37.62, -122.38, 'NA'),
-  A('SEA', 'Seattle', 47.45, -122.31, 'NA'),
-  A('DEN', 'Denver', 39.86, -104.67, 'NA'),
-  A('ATL', 'Atlanta', 33.64, -84.43, 'NA'),
-  A('MIA', 'Miami', 25.79, -80.29, 'NA'),
-  A('YYZ', 'Toronto', 43.68, -79.63, 'NA'),
-  A('YVR', 'Vancouver', 49.19, -123.18, 'NA'),
-  A('MEX', 'Mexico City', 19.44, -99.07, 'NA'),
-  A('YUL', 'Montréal', 45.47, -73.74, 'NA'),
-  A('BOS', 'Boston', 42.37, -71.01, 'NA'),
-  A('GRU', 'São Paulo', -23.43, -46.47, 'SA'),
-  A('EZE', 'Buenos Aires', -34.82, -58.54, 'SA'),
-  A('BOG', 'Bogotá', 4.7, -74.15, 'SA'),
-  A('LIM', 'Lima', -12.02, -77.11, 'SA'),
-  A('SCL', 'Santiago', -33.39, -70.79, 'SA'),
-  A('GIG', 'Rio de Janeiro', -22.81, -43.25, 'SA'),
-  A('LHR', 'London', 51.47, -0.46, 'EU'),
-  A('CDG', 'Paris', 49.01, 2.55, 'EU'),
-  A('AMS', 'Amsterdam', 52.31, 4.76, 'EU'),
-  A('FRA', 'Frankfurt', 50.04, 8.56, 'EU'),
-  A('MAD', 'Madrid', 40.47, -3.56, 'EU'),
-  A('FCO', 'Rome', 41.8, 12.25, 'EU'),
-  A('IST', 'Istanbul', 41.28, 28.75, 'EU'),
-  A('ARN', 'Stockholm', 59.65, 17.92, 'EU'),
-  A('KEF', 'Reykjavík', 63.99, -22.61, 'EU'),
-  A('DUB', 'Dublin', 53.42, -6.27, 'EU'),
-  A('LIS', 'Lisbon', 38.77, -9.13, 'EU'),
-  A('CPT', 'Cape Town', -33.97, 18.6, 'AF'),
-  A('JNB', 'Johannesburg', -26.13, 28.24, 'AF'),
-  A('CAI', 'Cairo', 30.11, 31.41, 'AF'),
-  A('LOS', 'Lagos', 6.58, 3.32, 'AF'),
-  A('NBO', 'Nairobi', -1.32, 36.93, 'AF'),
-  A('CMN', 'Casablanca', 33.37, -7.59, 'AF'),
-  A('ADD', 'Addis Ababa', 8.98, 38.8, 'AF'),
-  A('DXB', 'Dubai', 25.25, 55.36, 'AS'),
-  A('DEL', 'Delhi', 28.56, 77.1, 'AS'),
-  A('BOM', 'Mumbai', 19.09, 72.87, 'AS'),
-  A('SIN', 'Singapore', 1.36, 103.99, 'AS'),
-  A('HKG', 'Hong Kong', 22.31, 113.91, 'AS'),
-  A('NRT', 'Tokyo', 35.76, 140.39, 'AS'),
-  A('ICN', 'Seoul', 37.46, 126.44, 'AS'),
-  A('PEK', 'Beijing', 40.08, 116.58, 'AS'),
-  A('BKK', 'Bangkok', 13.69, 100.75, 'AS'),
-  A('TLV', 'Tel Aviv', 32.01, 34.89, 'AS'),
-  A('SYD', 'Sydney', -33.94, 151.18, 'OC'),
-  A('AKL', 'Auckland', -37.01, 174.79, 'OC'),
-  A('MEL', 'Melbourne', -37.67, 144.84, 'OC'),
+  A('ORD', 'Chicago', 41.98, -87.9, 'NA', -5),
+  A('JFK', 'New York', 40.64, -73.78, 'NA', -4),
+  A('LAX', 'Los Angeles', 33.94, -118.41, 'NA', -7),
+  A('SFO', 'San Francisco', 37.62, -122.38, 'NA', -7),
+  A('SEA', 'Seattle', 47.45, -122.31, 'NA', -7),
+  A('DEN', 'Denver', 39.86, -104.67, 'NA', -6),
+  A('ATL', 'Atlanta', 33.64, -84.43, 'NA', -4),
+  A('MIA', 'Miami', 25.79, -80.29, 'NA', -4),
+  A('YYZ', 'Toronto', 43.68, -79.63, 'NA', -4),
+  A('YVR', 'Vancouver', 49.19, -123.18, 'NA', -7),
+  A('MEX', 'Mexico City', 19.44, -99.07, 'NA', -6),
+  A('YUL', 'Montréal', 45.47, -73.74, 'NA', -4),
+  A('BOS', 'Boston', 42.37, -71.01, 'NA', -4),
+  A('GRU', 'São Paulo', -23.43, -46.47, 'SA', -3),
+  A('EZE', 'Buenos Aires', -34.82, -58.54, 'SA', -3),
+  A('BOG', 'Bogotá', 4.7, -74.15, 'SA', -5),
+  A('LIM', 'Lima', -12.02, -77.11, 'SA', -5),
+  A('SCL', 'Santiago', -33.39, -70.79, 'SA', -3),
+  A('GIG', 'Rio de Janeiro', -22.81, -43.25, 'SA', -3),
+  A('LHR', 'London', 51.47, -0.46, 'EU', 1),
+  A('CDG', 'Paris', 49.01, 2.55, 'EU', 2),
+  A('AMS', 'Amsterdam', 52.31, 4.76, 'EU', 2),
+  A('FRA', 'Frankfurt', 50.04, 8.56, 'EU', 2),
+  A('MAD', 'Madrid', 40.47, -3.56, 'EU', 2),
+  A('FCO', 'Rome', 41.8, 12.25, 'EU', 2),
+  A('IST', 'Istanbul', 41.28, 28.75, 'EU', 3),
+  A('ARN', 'Stockholm', 59.65, 17.92, 'EU', 2),
+  A('KEF', 'Reykjavík', 63.99, -22.61, 'EU', 0),
+  A('DUB', 'Dublin', 53.42, -6.27, 'EU', 1),
+  A('LIS', 'Lisbon', 38.77, -9.13, 'EU', 1),
+  A('CPT', 'Cape Town', -33.97, 18.6, 'AF', 2),
+  A('JNB', 'Johannesburg', -26.13, 28.24, 'AF', 2),
+  A('CAI', 'Cairo', 30.11, 31.41, 'AF', 3),
+  A('LOS', 'Lagos', 6.58, 3.32, 'AF', 1),
+  A('NBO', 'Nairobi', -1.32, 36.93, 'AF', 3),
+  A('CMN', 'Casablanca', 33.37, -7.59, 'AF', 1),
+  A('ADD', 'Addis Ababa', 8.98, 38.8, 'AF', 3),
+  A('DXB', 'Dubai', 25.25, 55.36, 'AS', 4),
+  A('DEL', 'Delhi', 28.56, 77.1, 'AS', 5.5),
+  A('BOM', 'Mumbai', 19.09, 72.87, 'AS', 5.5),
+  A('SIN', 'Singapore', 1.36, 103.99, 'AS', 8),
+  A('HKG', 'Hong Kong', 22.31, 113.91, 'AS', 8),
+  A('NRT', 'Tokyo', 35.76, 140.39, 'AS', 9),
+  A('ICN', 'Seoul', 37.46, 126.44, 'AS', 9),
+  A('PEK', 'Beijing', 40.08, 116.58, 'AS', 8),
+  A('BKK', 'Bangkok', 13.69, 100.75, 'AS', 7),
+  A('TLV', 'Tel Aviv', 32.01, 34.89, 'AS', 3),
+  A('SYD', 'Sydney', -33.94, 151.18, 'OC', 10),
+  A('AKL', 'Auckland', -37.01, 174.79, 'OC', 12),
+  A('MEL', 'Melbourne', -37.67, 144.84, 'OC', 10),
 ];
 
 export const HOME = 'ORD';
@@ -133,3 +136,13 @@ export function planRoute(fromIata: string, minutes: number, seed: string): Rout
   const to = pool[hash(`${from.iata}|${minutes}|${seed}`) % pool.length];
   return { from, to, km: distanceKm(from, to), band: BANDS[bandIndex].name };
 }
+
+/** wall-clock time at an airport right now */
+export const localTime = (airport: Airport, when = new Date()): string => {
+  const utc = when.getTime() + when.getTimezoneOffset() * 60_000;
+  const there = new Date(utc + airport.tz * 3_600_000);
+  return there.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+};
+
+export const KM_TO_MI = 0.621_371;
+export const EARTH_CIRCUMFERENCE_KM = 40_075;

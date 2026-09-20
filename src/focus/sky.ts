@@ -6,6 +6,9 @@ export type SkyMode = 'globe' | 'satellite' | 'flat';
 export interface Sky {
   mode: SkyMode;
   setProgress(t: number): void;
+  setCamera?(mode: 'chase' | 'wing' | 'orbit' | 'overhead', manual?: boolean): void;
+  cameraMode?(): 'chase' | 'wing' | 'orbit' | 'overhead';
+  shake?(strength?: number): void;
   pause(): void;
   resume(): void;
   setQuality?(mode: 'full' | 'low'): void;
@@ -18,6 +21,7 @@ interface SkyOptions {
   interactive: boolean;
   now?: () => Date;
   flyIn?: boolean;
+  aircraft?: string;
 }
 
 /** The flat map is the one that always works: no WebGL, no network. */
@@ -92,11 +96,15 @@ export async function createSky(host: HTMLElement, options: SkyOptions, mode: Sk
         showPlane: options.showPlane,
         now: options.now,
         flyIn: options.flyIn,
+        aircraft: options.aircraft,
       });
       host.dataset.sky = 'globe';
       return {
         mode: 'globe',
         setProgress: (t) => globe.setProgress(t),
+        setCamera: (mode, manual) => globe.setCamera(mode, manual),
+        cameraMode: () => globe.cameraMode(),
+        shake: (strength) => globe.shake(strength),
         pause: () => globe.pause(),
         resume: () => globe.resume(),
         setQuality: (mode) => globe.setQuality(mode),
