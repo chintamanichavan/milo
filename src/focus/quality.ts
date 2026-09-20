@@ -95,6 +95,7 @@ export class Governor {
   private last = 0;
   private good = 0;
   private patience = 8;
+  private recent = 0;
   scale = 1;
 
   constructor(
@@ -110,6 +111,7 @@ export class Governor {
     this.last = now;
     if (this.times.length < 45) return;
     const mean = this.times.reduce((s, x) => s + x, 0) / this.times.length;
+    this.recent = mean;
     this.times.length = 0;
     if (mean > this.target) {
       this.good = 0;
@@ -132,8 +134,12 @@ export class Governor {
   }
 
   fps(): number {
-    if (this.times.length === 0) return 0;
-    const mean = this.times.reduce((s, x) => s + x, 0) / this.times.length;
-    return Math.round(1000 / mean);
+    // a window that has just been counted leaves the buffer empty, and the
+    // answer then is the window we have just measured, not nothing
+    const mean =
+      this.times.length >= 5
+        ? this.times.reduce((s, x) => s + x, 0) / this.times.length
+        : this.recent;
+    return mean > 0 ? Math.round(1000 / mean) : 0;
   }
 }
