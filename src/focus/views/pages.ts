@@ -4,6 +4,7 @@ import { toast } from '../../ui/toast';
 import { BADGES } from '../achievements';
 import { AIRPORTS, airport, distanceKm, KM_TO_MI, type Continent } from '../airports';
 import { rankFor, nextRank, wings } from '../flightkit';
+import { setTier, tier } from '../quality';
 import { planeSilhouette } from '../aircraft3d';
 import { FLEET, nextUnlock, unlocked } from '../planes';
 import { createSky, type Sky } from '../sky';
@@ -354,6 +355,18 @@ export function focusSettingsView(root: HTMLElement): () => void {
       <p class="line sub">The globe works offline. The satellite map needs internet and comes from Esri.</p>
     </div>
     <div class="panel">
+      <p class="tag">Rendering</p>
+      <div class="chips" id="tierChips">
+        ${(['high', 'medium', 'low'] as const)
+          .map(
+            (t) => `<button class="chip tap${tier() === t ? ' on' : ''}" data-tier="${t}">${t}</button>`,
+          )
+          .join('')}
+      </div>
+      <p class="line sub">Picked from your device the first time. High draws more of the
+        planet — more detail, more stars, thicker air. Low keeps the frame rate on older phones.</p>
+    </div>
+    <div class="panel">
       <p class="tag">Destinations</p>
       ${labelRows || '<p class="line sub">Labels appear once you fly somewhere.</p>'}
       <p class="line sub">Rename a label to merge it into another with the same name.</p>
@@ -375,6 +388,13 @@ export function focusSettingsView(root: HTMLElement): () => void {
     if (!chip) return;
     setFocusSettings({ breakMin: Number(chip.dataset.break) });
     focusSettingsView(root);
+  });
+  root.querySelector('#tierChips')!.addEventListener('click', (ev) => {
+    const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-tier]');
+    if (!chip) return;
+    setTier(chip.dataset.tier as 'high' | 'medium' | 'low');
+    focusSettingsView(root);
+    toast('Rendering quality changed');
   });
   root.querySelector('#skyChips')!.addEventListener('click', (ev) => {
     const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-sky]');

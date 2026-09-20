@@ -2665,6 +2665,25 @@ body[data-view='done'] .tabbar {
   font: 400 var(--t12) / 1 var(--mono);
 }
 
+.fps-hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 4px);
+  left: 50%;
+  color: var(--muted);
+  font: 400 10px / 1 var(--mono);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* a soft vignette, free of charge */
+.sky-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
 .pip {
   position: absolute;
   top: var(--u);

@@ -9,12 +9,14 @@ export interface Budget {
   water: boolean;
   stars: number;
   atmosphere: boolean;
+  /** how hard the city lights glow; the top tier gets a little bloom for free */
+  nightGain: number;
 }
 
 export const BUDGETS: Record<Tier, Budget> = {
-  high: { dpr: 2, sphereSegments: [128, 80], clouds: true, topo: true, water: true, stars: 2400, atmosphere: true },
-  medium: { dpr: 1.5, sphereSegments: [96, 64], clouds: true, topo: false, water: true, stars: 1200, atmosphere: true },
-  low: { dpr: 1, sphereSegments: [64, 48], clouds: false, topo: false, water: false, stars: 600, atmosphere: true },
+  high: { dpr: 2, sphereSegments: [128, 80], clouds: true, topo: true, water: true, stars: 2400, atmosphere: true, nightGain: 2.1 },
+  medium: { dpr: 1.5, sphereSegments: [96, 64], clouds: true, topo: false, water: true, stars: 1200, atmosphere: true, nightGain: 1.7 },
+  low: { dpr: 1, sphereSegments: [64, 48], clouds: false, topo: false, water: false, stars: 600, atmosphere: true, nightGain: 1.4 },
 };
 
 const KEY = 'c25k.tier';

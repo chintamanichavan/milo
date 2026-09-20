@@ -119,6 +119,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       </footer>
       <p class="note" id="note" hidden>turbulence — welcome back</p>
       <p class="sr" aria-live="polite" id="live"></p>
+      ${new URLSearchParams(location.search).has('test') ? '<p class="fps-hud" id="fps"></p>' : ''}
     </section>`;
 
   const stage = root.querySelector<HTMLElement>('#stage')!;
@@ -373,8 +374,13 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   for (const evt of ['pointerdown', 'keydown'] as const)
     document.addEventListener(evt, wake, { capture: true, passive: true });
 
+  const hud = root.querySelector<HTMLElement>('#fps');
   const ticker = window.setInterval(() => {
     paint();
+    if (hud) {
+      const reading = (window as unknown as { __milo?: { fps?: () => number; scale?: () => number } }).__milo;
+      setText(hud, `${reading?.fps?.() ?? 0} fps · ${Math.round((reading?.scale?.() ?? 1) * 100)}%`);
+    }
     if (Date.now() > dimAt && !document.body.classList.contains('dim')) {
       document.body.classList.add('dim');
       sky?.setQuality?.('low');

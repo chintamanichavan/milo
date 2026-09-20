@@ -82,6 +82,7 @@ const EARTH_FRAG = `
   uniform float cloudAmount;
   uniform float specAmount;
   uniform float topoAmount;
+  uniform float nightGain;
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vViewDir;
@@ -107,9 +108,13 @@ const EARTH_FRAG = `
     // city lights: warm, a little bloomed, never grey
     vec3 lights = texture2D(nightMap, vUv).rgb;
     float glow = smoothstep(0.05, 0.4, dot(lights, vec3(0.33)));
-    vec3 night = lights * vec3(1.25, 0.92, 0.6) * 1.4 + vec3(1.0, 0.72, 0.38) * glow * 0.35;
+    vec3 night = lights * vec3(1.3, 0.94, 0.58) * nightGain
+      + vec3(1.0, 0.72, 0.38) * glow * 0.4
+      // earthshine: the dark side is never truly black
+      + vec3(0.012, 0.017, 0.032);
 
-    float dayAmount = smoothstep(-0.04, 0.11, lit);
+    // twilight blends over about twelve degrees, with the scattering going warm
+    float dayAmount = smoothstep(-0.10, 0.11, lit);
     vec3 col = mix(night, day * (0.25 + 1.05 * max(lit, 0.0)) + spec, dayAmount);
 
     // cloud layer, with a soft shadow just behind it
@@ -136,14 +141,34 @@ const ATMO_FRAG = `
   uniform vec3 sunDir;
   varying vec3 vNormalW;
   varying vec3 vViewDir;
+
+  // Rayleigh scatters blue hardest, so a long path through air goes orange:
+  // the day limb reads blue, the terminator red, the night side almost nothing.
+  const vec3 RAYLEIGH = vec3(5.5, 13.0, 22.4);
+
   void main() {
     vec3 normal = normalize(vNormalW);
-    // soft and wide at the limb, fading inward
-    float rim = 1.0 - max(dot(normal, normalize(vViewDir)), 0.0);
-    float fres = pow(rim, 2.1) * 0.75 + pow(rim, 5.0) * 0.9;
-    float lit = smoothstep(-0.5, 0.45, dot(normal, normalize(sunDir)));
-    vec3 col = mix(tint * 0.55 + vec3(0.10, 0.16, 0.30), glow, lit) * fres * (0.5 + lit * 1.6);
-    gl_FragColor = vec4(col, fres * (0.25 + lit * 0.9));
+    vec3 view = normalize(vViewDir);
+    vec3 sun = normalize(sunDir);
+    float rim = 1.0 - max(dot(normal, view), 0.0);
+    float thickness = pow(rim, 2.0) * 0.8 + pow(rim, 5.5) * 1.1;
+    float lit = dot(normal, sun);
+    float day = smoothstep(-0.35, 0.35, lit);
+
+    // how much air the light crosses on its way to the eye
+    float grazing = pow(1.0 - abs(lit), 3.0);
+    vec3 scattered = exp(-RAYLEIGH * (0.012 + grazing * 0.085));
+    vec3 blue = glow * 0.9;
+    vec3 sunsetColour = normalize(scattered) * 1.35;
+
+    // Mie: a forward-scattering halo around the sun itself
+    float mie = pow(max(dot(view, -sun), 0.0), 8.0) * 0.35;
+
+    vec3 col = mix(tint * 0.18 + vec3(0.03, 0.05, 0.10), mix(sunsetColour, blue, day), day * 0.85 + 0.15);
+    col *= thickness * (0.35 + day * 1.7);
+    col += sunsetColour * grazing * day * thickness * 0.8;
+    col += glow * mie * day;
+    gl_FragColor = vec4(col, thickness * (0.16 + day * 0.95));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -287,6 +312,7 @@ export async function createGlobe(
         cloudAmount: { value: limits.clouds ? 1 : 0 },
         specAmount: { value: limits.water ? 1 : 0 },
         topoAmount: { value: limits.topo ? 1 : 0 },
+        nightGain: { value: limits.nightGain },
       },
       vertexShader: VERT,
       fragmentShader: EARTH_FRAG,
@@ -461,6 +487,15 @@ export async function createGlobe(
 
   const desired = new THREE.Vector3(0, 0, 3.2);
   const desiredTarget = new THREE.Vector3(0, 0, 0);
+  /** critically-damped spring, so the camera never snaps or drifts */
+  const velocity = new THREE.Vector3();
+  const spring = (dt: number, stiffness = 26): void => {
+    const step = Math.min(0.05, dt);
+    const pull = desired.clone().sub(camera.position).multiplyScalar(stiffness);
+    const drag = velocity.clone().multiplyScalar(2 * Math.sqrt(stiffness));
+    velocity.add(pull.sub(drag).multiplyScalar(step));
+    camera.position.add(velocity.clone().multiplyScalar(step));
+  };
   let distance = 3.2;
   let progress = 0;
   let lastTouch = 0;
@@ -511,6 +546,7 @@ export async function createGlobe(
   let cutStart = 0;
   const cutFrom = new THREE.Vector3();
   let lastCycle = Date.now();
+  let lastSpring = performance.now();
   let shakeUntil = 0;
   let shakeAmount = 0;
   /** the ground-truth tests park the camera and expect it to stay put */
@@ -688,6 +724,7 @@ export async function createGlobe(
     if (introT < 1) {
       const eased = (1 - introT) ** 3;
       camera.position.copy(desired.clone().multiplyScalar(1 + eased * 2.2));
+      velocity.set(0, 0, 0);
       camera.lookAt(desiredTarget);
     } else if (now - cutStart < 1200) {
       // a cut eases over 1.2 s, whatever the frame rate
@@ -695,16 +732,10 @@ export async function createGlobe(
       camera.position.copy(cutFrom.clone().lerp(desired, k));
       camera.lookAt(desiredTarget);
     } else if (Date.now() - lastTouch > 5000) {
-      const want = desired.length();
-      const dir = camera.position
-        .clone()
-        .normalize()
-        .lerp(desired.clone().normalize(), 0.08)
-        .normalize();
-      const radius = THREE.MathUtils.lerp(camera.position.length(), want, 0.1);
-      camera.position.copy(dir.multiplyScalar(radius));
+      spring((now - lastSpring) / 1000);
       camera.lookAt(desiredTarget);
     }
+    lastSpring = now;
     // labels fade on the far side and hold a steady size, however close the camera gets
     for (const [sprite, pin, width] of [
       [labelFrom, pinFrom, 0.115],
