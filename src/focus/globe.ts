@@ -605,7 +605,7 @@ export async function createGlobe(
     // a two and a half second dolly in from a far shot, then cruise
     const introT = flyIn ? Math.min(1, (now - introStart) / INTRO_MS) : 1;
     if (frozen) {
-      controls?.update();
+      // the ground-truth tests park the camera; the controls must not re-aim it
       renderer.render(scene, camera);
       return;
     }
@@ -703,6 +703,7 @@ export async function createGlobe(
         frozen = true;
         manualUntil = Date.now() + 600_000;
         const at = llToVec3(lat, lon);
+        desiredTarget.set(0, 0, 0);
         camera.position.copy(at.clone().normalize().multiplyScalar(fitDistance(1.02)));
         camera.lookAt(0, 0, 0);
         render();
