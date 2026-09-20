@@ -77,6 +77,7 @@ const EARTH_FRAG = `
   uniform sampler2D dayMap;
   uniform sampler2D nightMap;
   uniform sampler2D topoMap;
+  uniform sampler2D normalMap;
   uniform sampler2D waterMap;
   uniform sampler2D cloudMap;
   uniform vec3 sunDir;
@@ -84,6 +85,7 @@ const EARTH_FRAG = `
   uniform float cloudAmount;
   uniform float specAmount;
   uniform float topoAmount;
+  uniform float normalAmount;
   uniform float nightGain;
   varying vec2 vUv;
   varying vec3 vNormalW;
@@ -91,20 +93,29 @@ const EARTH_FRAG = `
 
   void main() {
     vec3 normal = normalize(vNormalW);
-    float lit = dot(normal, normalize(sunDir));
+    vec3 sun = normalize(sunDir);
+    float lit = dot(normal, sun);
 
-    // relief: slope of the topography lifts one side of every ridge
+    // relief: the terrain normal map tilts each slope towards or away from the sun
+    vec3 east = normalize(cross(vec3(0.0, 1.0, 0.0), normal));
+    vec3 north = cross(normal, east);
+    vec3 slope = (texture2D(normalMap, vUv).xyz * 2.0 - 1.0) * normalAmount;
+    vec3 ground = normalize(normal + east * slope.x - north * slope.y);
+    float litGround = dot(ground, sun);
+    float relief = mix(1.0, clamp(1.0 + (litGround - lit) * 2.2, 0.55, 1.55), normalAmount);
+
+    // older, cheaper relief for tiers without the normal map
     float texel = 1.0 / 2048.0;
     float hx = texture2D(topoMap, vUv + vec2(texel, 0.0)).r - texture2D(topoMap, vUv - vec2(texel, 0.0)).r;
     float hy = texture2D(topoMap, vUv + vec2(0.0, texel)).r - texture2D(topoMap, vUv - vec2(0.0, texel)).r;
-    float relief = mix(1.0, clamp(1.0 + (hx + hy) * 6.0, 0.75, 1.3), topoAmount);
+    relief *= mix(1.0, clamp(1.0 + (hx + hy) * 6.0, 0.75, 1.3), topoAmount);
 
     vec3 day = texture2D(dayMap, vUv).rgb * relief;
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 1.12);
 
     // water catches the sun
     float water = texture2D(waterMap, vUv).r;
-    vec3 halfVec = normalize(normalize(sunDir) + normalize(vViewDir));
+    vec3 halfVec = normalize(sun + normalize(vViewDir));
     float spec = pow(max(dot(normal, halfVec), 0.0), 90.0) * water * 0.55 * specAmount;
 
     // city lights: warm, a little bloomed, never grey
@@ -289,12 +300,13 @@ export async function createGlobe(
   };
 
   const blank = new THREE.Texture();
-  const [dayMap, nightMap, topoMap, waterMap, cloudMap] = await Promise.all([
+  const [dayMap, nightMap, topoMap, waterMap, cloudMap, normalMap] = await Promise.all([
     loadOnce('/earth/day-4k.ktx2', '/earth/day.jpg', true),
     loadOnce('/earth/night-2k.ktx2', '/earth/night.jpg', true),
-    limits.topo ? loadOnce('/earth/topo-2k.ktx2', '/earth/topo.jpg', false) : Promise.resolve(blank),
+    limits.topo && !limits.normals ? loadOnce('/earth/topo-2k.ktx2', '/earth/topo.jpg', false) : Promise.resolve(blank),
     limits.water ? loadOnce('/earth/water-1k.ktx2', '/earth/water.jpg', false) : Promise.resolve(blank),
     limits.clouds ? loadOnce('/earth/clouds-2k.ktx2', '/earth/clouds.jpg', false) : Promise.resolve(blank),
+    limits.normals ? loadOnce('/earth/normal-2k.ktx2', '/earth/normal.jpg', false) : Promise.resolve(blank),
   ]);
 
   const sunDir = { value: sunDirection(clock()) };
@@ -310,13 +322,15 @@ export async function createGlobe(
         dayMap: { value: dayMap },
         nightMap: { value: nightMap },
         topoMap: { value: topoMap },
+        normalMap: { value: normalMap },
         waterMap: { value: waterMap },
         cloudMap: { value: cloudMap },
         sunDir,
         cloudShift,
         cloudAmount: { value: limits.clouds ? 1 : 0 },
         specAmount: { value: limits.water ? 1 : 0 },
-        topoAmount: { value: limits.topo ? 1 : 0 },
+        topoAmount: { value: limits.topo && !limits.normals ? 1 : 0 },
+        normalAmount: { value: limits.normals ? 1 : 0 },
         nightGain: { value: limits.nightGain },
       },
       vertexShader: VERT,
@@ -891,10 +905,12 @@ export async function createGlobe(
         clouds: withClouds = true,
         atmosphere: withAtmosphere = true,
         specular: withSpecular = true,
+        normals: withNormals = limits.normals,
       }) {
         const uniforms = (earth.material as THREE.ShaderMaterial).uniforms;
         uniforms.cloudAmount.value = withClouds ? 1 : 0;
         uniforms.specAmount.value = withSpecular ? 1 : 0;
+        uniforms.normalAmount.value = withNormals && limits.normals ? 1 : 0;
         atmosphere.visible = withAtmosphere;
         render();
       },
