@@ -857,6 +857,15 @@ export async function createGlobe(
         } else if (!tileLayer && showPlane) tileLayer = createTileLayer(scene);
       },
       scale: () => governor.scale,
+      /** pin the render scale, for screenshots on software rasterisers */
+      setScale: (value: number) => {
+        governor.scale = value;
+        const rect = host.getBoundingClientRect();
+        renderer.setSize(Math.max(1, rect.width * value), Math.max(1, rect.height * value), false);
+        renderer.domElement.style.width = `${Math.round(rect.width)}px`;
+        renderer.domElement.style.height = `${Math.round(rect.height)}px`;
+        render();
+      },
       projectVec: (x: number, y: number, z: number) => {
         const v = new THREE.Vector3(x, y, z).project(camera);
         const rect = host.getBoundingClientRect();
