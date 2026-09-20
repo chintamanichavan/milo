@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { buildFlare } from './flare';
 import { budget, effects, Governor, markBenchmark } from './quality';
-import { createTileLayer, type TileLayer } from './tiles';
+import { createTileLayer, TILE_INTERVAL, type TileLayer } from './tiles';
 import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
 
@@ -593,6 +593,38 @@ export async function createGlobe(
     return { centre, radius: Math.max(0.06, radius) };
   }
 
+  /**
+   * How much ground the frame actually covers, in degrees, by throwing the four
+   * corners of the view at the planet. A camera looking along the ground sees
+   * far more of it than one looking straight down, and the imagery has to know.
+   */
+  function groundSpan(at: THREE.Vector3): number {
+    const middle = at.clone().normalize();
+    const height = camera.position.length();
+    const horizon = Math.acos(Math.min(1, 1 / Math.max(1.0001, height)));
+    let widest = 0;
+    for (const [x, y] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      const ray = new THREE.Vector3(x, y, 0.5).unproject(camera).sub(camera.position).normalize();
+      const along = -ray.dot(camera.position);
+      const miss = camera.position.lengthSq() - along * along;
+      let angle = horizon;
+      if (miss < 1) {
+        const hit = camera.position
+          .clone()
+          .add(ray.multiplyScalar(along - Math.sqrt(1 - miss)))
+          .normalize();
+        angle = hit.angleTo(middle);
+      }
+      widest = Math.max(widest, Math.min(horizon, angle));
+    }
+    return (widest * 2 * 180) / Math.PI;
+  }
+
   /** how far back the camera must sit to hold the whole arc, with a quarter margin */
   function fitRoute(): { centre: THREE.Vector3; back: number } {
     const halfV = THREE.MathUtils.degToRad(camera.fov) / 2;
@@ -799,9 +831,12 @@ export async function createGlobe(
     // stream sharper imagery around whatever the camera is looking at
     if (tileLayer) {
       tileLayer.fade(Math.min(0.05, (now - lastSpring) / 1000));
-      if (now - lastTiles > 700) {
+      if (now - lastTiles > TILE_INTERVAL) {
         lastTiles = now;
-        tileLayer.update(desiredTarget.lengthSq() > 0.01 ? desiredTarget : plane.position, camera.position.length());
+        const at = desiredTarget.lengthSq() > 0.01 ? desiredTarget : plane.position;
+        // and where the aircraft will be in a couple of minutes
+        const ahead = showPlane && points.length ? points[Math.min(points.length - 1, Math.round(progress * points.length) + 12)] : undefined;
+        tileLayer.update(at, camera.position.length(), groundSpan(at), ahead);
       }
     }
 
@@ -945,6 +980,7 @@ export async function createGlobe(
       sunDirection: () => sunDirection(clock()).toArray(),
       fps: () => governor.fps(),
       tiles: () => tileLayer?.count() ?? 0,
+      seams: () => tileLayer?.seams() ?? { zoom: 0, edges: [], centres: [], rim: [] },
       setTiles: (on: boolean) => {
         if (!on) {
           tileLayer?.dispose();
