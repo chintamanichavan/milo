@@ -127,6 +127,9 @@ const EARTH_FRAG = `
       sin(vUv.y * 1700.0 + seaTime * 1.5) * sin(vUv.x * 900.0 + seaTime * 2.1)
         + 0.5 * sin(vUv.y * 3700.0 + seaTime * 3.1)
     ) * 0.02 * waveAmount;
+    // at a grazing angle a pixel covers miles of sea, and the ripples would
+    // only alias into a hatch, so they ease off towards the limb
+    ripple *= smoothstep(0.15, 0.5, max(dot(normal, normalize(vViewDir)), 0.0));
     vec3 sea = normalize(normal + east * ripple.x + north * ripple.y);
     float gloss = pow(max(dot(sea, halfVec), 0.0), 90.0);
     float sheen = pow(max(dot(normal, halfVec), 0.0), 26.0) * 0.25;
@@ -794,7 +797,7 @@ export async function createGlobe(
     seaTime.value = now / 1000;
     // the cloud map is two thousand pixels wide: lovely from orbit, a smear from
     // the cruising altitude of an aircraft, so it thins out as the camera drops
-    cloudNear.value = Math.max(0, Math.min(1, (camera.position.length() - 1.02) / 0.22));
+    cloudNear.value = Math.max(0, Math.min(1, (camera.position.length() - 1.1) / 0.4));
     // ripples are only worth drawing from close in; far out they would just crawl
     waveAmount.value =
       limits.water && fx.waves
