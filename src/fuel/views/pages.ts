@@ -192,7 +192,7 @@ export function fuelTodayView(root: HTMLElement, date = dayKey()): () => void {
   };
 
   root.querySelector('#add')!.addEventListener('click', () => openSearch('breakfast'));
-  root.addEventListener('click', (ev) => {
+  root.firstElementChild!.addEventListener('click', (ev) => {
     const add = (ev.target as HTMLElement).closest<HTMLElement>('[data-addmeal]');
     if (add) return openSearch(add.dataset.addmeal as Meal);
     const copy = (ev.target as HTMLElement).closest<HTMLElement>('[data-copymeal]');

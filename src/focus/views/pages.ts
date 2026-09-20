@@ -345,7 +345,7 @@ export function focusSettingsView(root: HTMLElement): () => void {
     focusSettingsView(root);
   });
 
-  root.addEventListener('click', (ev) => {
+  root.firstElementChild!.addEventListener('click', (ev) => {
     const swatch = (ev.target as HTMLElement).closest<HTMLElement>('[data-swatch]');
     if (!swatch) return;
     const i = Number(swatch.dataset.swatch);
@@ -354,7 +354,7 @@ export function focusSettingsView(root: HTMLElement): () => void {
     saveFocus(next);
     focusSettingsView(root);
   });
-  root.addEventListener('change', (ev) => {
+  root.firstElementChild!.addEventListener('change', (ev) => {
     const input = (ev.target as HTMLElement).closest<HTMLInputElement>('[data-name]');
     if (!input) return;
     const i = Number(input.dataset.name);
@@ -364,7 +364,7 @@ export function focusSettingsView(root: HTMLElement): () => void {
       toast('Label updated');
     });
   });
-  root.addEventListener('click', (ev) => {
+  root.firstElementChild!.addEventListener('click', (ev) => {
     const button = (ev.target as HTMLElement).closest<HTMLElement>('[data-archive]');
     if (!button) return;
     const i = Number(button.dataset.archive);

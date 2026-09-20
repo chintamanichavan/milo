@@ -273,7 +273,7 @@ export function liftHistoryView(root: HTMLElement): () => void {
     });
   };
 
-  root.addEventListener('click', (ev) => {
+  root.firstElementChild!.addEventListener('click', (ev) => {
     const cell = (ev.target as HTMLElement).closest<HTMLElement>('[data-session]');
     if (cell) open(Number(cell.dataset.session));
   });

@@ -10,6 +10,15 @@ import {
   shoppingView,
 } from './cook/views/pages';
 import {
+  habitDetailView,
+  habitNewView,
+  habitsTodayView,
+  lessonsView,
+  manageView,
+  reflectView,
+  templatesView,
+} from './habits/views/pages';
+import {
   fuelTodayView,
   nutrientsView,
   programView,
@@ -101,6 +110,14 @@ function route(): void {
   else if (parts[0] === 'fuel' && parts[1] === 'trends') cleanup = trendsView(app);
   else if (parts[0] === 'fuel' && parts[1] === 'program') cleanup = programView(app);
   else if (parts[0] === 'fuel') cleanup = fuelTodayView(app);
+  else if (parts[0] === 'habits' && parts[1] === 'new') cleanup = habitNewView(app);
+  else if (parts[0] === 'habits' && parts[1] === 'edit') cleanup = habitNewView(app, parts[2]);
+  else if (parts[0] === 'habits' && parts[1] === 'habit') cleanup = habitDetailView(app, parts[2]);
+  else if (parts[0] === 'habits' && parts[1] === 'templates') cleanup = templatesView(app);
+  else if (parts[0] === 'habits' && parts[1] === 'lessons') cleanup = lessonsView(app);
+  else if (parts[0] === 'habits' && parts[1] === 'reflect') cleanup = reflectView(app);
+  else if (parts[0] === 'habits' && parts[1] === 'manage') cleanup = manageView(app);
+  else if (parts[0] === 'habits') cleanup = habitsTodayView(app);
   else cleanup = todayView(app);
   const tab = (parts[0] || 'run') as Tab;
   setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits'].includes(tab) ? tab : 'run');

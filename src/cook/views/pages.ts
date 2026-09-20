@@ -589,7 +589,7 @@ export function shoppingView(root: HTMLElement): () => void {
     addManualItem(list.id, input.value.trim());
     shoppingView(root);
   });
-  root.addEventListener('change', (ev) => {
+  root.firstElementChild!.addEventListener('change', (ev) => {
     const box = (ev.target as HTMLElement).closest<HTMLInputElement>('[data-item]');
     if (!box) return;
     toggleItem(list.id, Number(box.dataset.item));

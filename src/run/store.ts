@@ -1,6 +1,7 @@
 import { COOK_KEY } from '../cook/store';
 import { FOCUS_KEY } from '../focus/store';
 import { FUEL_KEY } from '../fuel/store';
+import { HABITS_KEY } from '../habits/store';
 import { LIFT_KEY } from '../lift/store';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
@@ -211,6 +212,7 @@ export function exportFile(): void {
     focus: JSON.parse(localStorage.getItem(FOCUS_KEY) ?? 'null') as unknown,
     cook: JSON.parse(localStorage.getItem(COOK_KEY) ?? 'null') as unknown,
     fuel: JSON.parse(localStorage.getItem(FUEL_KEY) ?? 'null') as unknown,
+    habits: JSON.parse(localStorage.getItem(HABITS_KEY) ?? 'null') as unknown,
   };
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -229,6 +231,7 @@ export async function importFile(file: File): Promise<boolean> {
       focus?: unknown;
       cook?: unknown;
       fuel?: unknown;
+      habits?: unknown;
     } & Partial<State>;
     // older exports were the run half on its own
     const run = Array.isArray(parsed.completedRuns) ? parsed : parsed.run;
@@ -242,6 +245,7 @@ export async function importFile(file: File): Promise<boolean> {
     if (parsed.focus) localStorage.setItem(FOCUS_KEY, JSON.stringify(parsed.focus));
     if (parsed.cook) localStorage.setItem(COOK_KEY, JSON.stringify(parsed.cook));
     if (parsed.fuel) localStorage.setItem(FUEL_KEY, JSON.stringify(parsed.fuel));
+    if (parsed.habits) localStorage.setItem(HABITS_KEY, JSON.stringify(parsed.habits));
     return true;
   } catch {
     return false;
