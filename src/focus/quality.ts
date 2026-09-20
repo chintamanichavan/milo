@@ -94,6 +94,8 @@ export function setEffect(name: keyof Effects, on: boolean): void {
 export class Governor {
   private times: number[] = [];
   private last = 0;
+  private good = 0;
+  private patience = 8;
   scale = 1;
 
   constructor(
@@ -110,10 +112,21 @@ export class Governor {
     if (this.times.length < 45) return;
     const mean = this.times.reduce((s, x) => s + x, 0) / this.times.length;
     this.times.length = 0;
-    if (mean > this.target && this.scale > 0.6) {
-      this.scale = Math.max(0.6, this.scale - 0.15);
-      this.onScale(this.scale);
-    } else if (mean < this.target * 0.6 && this.scale < 1) {
+    if (mean > this.target) {
+      this.good = 0;
+      if (this.scale > 0.6) {
+        this.scale = Math.max(0.6, this.scale - 0.15);
+        this.onScale(this.scale);
+        // it failed at that size, so wait longer before trying again
+        this.patience = Math.min(64, this.patience * 2);
+      }
+      return;
+    }
+    // a screen caps us at its own refresh, so keeping up with the cadence is as
+    // fast as it gets: wait for a stretch of it, then take some sharpness back
+    this.good += mean < this.target - 1 ? 1 : 0;
+    if (this.scale < 1 && this.good >= this.patience) {
+      this.good = 0;
       this.scale = Math.min(1, this.scale + 0.1);
       this.onScale(this.scale);
     }
