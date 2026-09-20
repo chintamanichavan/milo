@@ -4,7 +4,8 @@ import { toast } from '../../ui/toast';
 import { BADGES } from '../achievements';
 import { AIRPORTS, airport, distanceKm, KM_TO_MI, type Continent } from '../airports';
 import { rankFor, nextRank, wings } from '../flightkit';
-import { FLEET, nextUnlock, planeGlyph, unlocked } from '../planes';
+import { planeSilhouette } from '../aircraft3d';
+import { FLEET, nextUnlock, unlocked } from '../planes';
 import { createSky, type Sky } from '../sky';
 import {
   dayKey,
@@ -115,7 +116,7 @@ export function hangarView(root: HTMLElement): () => void {
     const on = state.settings.aircraft === a.id;
     return `<button class="card tap${open ? '' : ' locked'}${on ? ' on' : ''}" data-plane="${a.id}"
       ${open ? '' : 'disabled'}>
-      <span class="glyph">${planeGlyph(a.id, 64)}</span>
+      <span class="glyph">${planeSilhouette(52, 1.3)}</span>
       <b>${a.name}</b>
       <span class="tag">${open ? (on ? 'flying' : 'ready') : `${a.hours} h`}</span>
     </button>`;
@@ -126,6 +127,7 @@ export function hangarView(root: HTMLElement): () => void {
     `<div class="hero">
       <p class="tag section">Hangar</p>
       <h1>${unlocked(hours).length}<span><i> · </i>of ${FLEET.length} unlocked</span></h1>
+      <div class="turntable" id="turntable" aria-label="the aircraft you are flying"></div>
       <p class="line sub">${hh(hours)} landed${
         next ? ` · ${(next.hours - hours).toFixed(1)} h to the ${next.name.toLowerCase()}` : ' · the whole fleet is yours'
       }</p>
@@ -140,7 +142,16 @@ export function hangarView(root: HTMLElement): () => void {
     hangarView(root);
     toast('Aircraft changed');
   });
-  return () => {};
+
+  // one turntable, showing the aircraft you actually fly
+  let stop = (): void => {};
+  void (async () => {
+    const host = root.querySelector<HTMLElement>('#turntable');
+    if (!host) return;
+    const { showcase } = await import('../showcase');
+    stop = await showcase(host, state.settings.aircraft);
+  })();
+  return () => stop();
 }
 
 /* ---------- badges ---------- */

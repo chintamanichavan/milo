@@ -4,6 +4,7 @@ import { toast } from '../../ui/toast';
 import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
 import { clock } from '../../ui/time';
+import { planeSilhouette } from '../aircraft3d';
 import { KM_TO_MI, localTime, planRoute } from '../airports';
 import {
   announcement,
@@ -81,7 +82,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
         <div class="strip-line">
           <b>${route.from.iata}</b>
           <i class="strip-track"><span class="strip-flown" id="stripFlown"></span>
-            <span class="strip-plane" id="stripPlane">✈</span></i>
+            <span class="strip-plane" id="stripPlane">${planeSilhouette(18, 1.6)}</span></i>
           <b>${route.to.iata}</b>
         </div>
         <div class="strip-figures">
@@ -241,6 +242,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       phase = nextPhase;
       setText(phaseLabel, PHASE_LABEL[nextPhase]);
       stage.dataset.phase = nextPhase;
+      sky?.setPhase?.(nextPhase);
       speak(announcement(nextPhase, route.to.city));
       if (nextPhase === 'landing') beep('chime');
       // engines: loud on the roll, soft at altitude

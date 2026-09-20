@@ -7,6 +7,7 @@ export interface Sky {
   mode: SkyMode;
   setProgress(t: number): void;
   setCamera?(mode: 'chase' | 'wing' | 'orbit' | 'overhead', manual?: boolean): void;
+  setPhase?(phase: string): void;
   cameraMode?(): 'chase' | 'wing' | 'orbit' | 'overhead';
   shake?(strength?: number): void;
   pause(): void;
@@ -103,6 +104,7 @@ export async function createSky(host: HTMLElement, options: SkyOptions, mode: Sk
         mode: 'globe',
         setProgress: (t) => globe.setProgress(t),
         setCamera: (mode, manual) => globe.setCamera(mode, manual),
+        setPhase: (phase) => globe.setPhase(phase),
         cameraMode: () => globe.cameraMode(),
         shake: (strength) => globe.shake(strength),
         pause: () => globe.pause(),

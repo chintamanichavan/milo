@@ -15,6 +15,7 @@ export interface GlobeRoute {
 
 export interface GlobeHandle {
   setProgress(t: number): void;
+  setPhase(phase: string): void;
   setCamera(mode: CameraMode, manual?: boolean): void;
   cameraMode(): CameraMode;
   setAircraft(id: string): void;
@@ -360,13 +361,22 @@ export async function createGlobe(
   let labelTo = labelSprite('', '#c9b6ff');
   scene.add(labelFrom, labelTo);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-  const sunLight = new THREE.DirectionalLight(0xfff3e0, 2.2);
+  // the sun is the key light; the earth below is a soft fill
+  const sunLight = new THREE.DirectionalLight(0xfff3e0, 3.4);
   scene.add(sunLight);
+  const fill = new THREE.HemisphereLight(0x8aa3c8, 0x2a2f38, 0.9);
+  scene.add(fill);
 
   const plane = new THREE.Group();
   plane.visible = showPlane;
   scene.add(plane);
+
+  const blob = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 }),
+  );
+  blob.visible = false;
+  scene.add(blob);
   let model: Plane3D = buildAircraft(aircraftId);
   plane.add(model.group);
 
@@ -422,7 +432,7 @@ export async function createGlobe(
     flown.geometry = new THREE.TubeGeometry(
       curve,
       SEGMENTS,
-      THREE.MathUtils.clamp(back * 0.006, 0.0012, 0.008),
+      THREE.MathUtils.clamp(back * 0.0022, 0.0009, 0.0035),
       8,
       false,
     );
@@ -454,6 +464,9 @@ export async function createGlobe(
   let distance = 3.2;
   let progress = 0;
   let lastTouch = 0;
+  let phaseName = 'cruise';
+  let turnRate = 0;
+  const lastHeading = new THREE.Vector3();
   const introStart = performance.now();
   const INTRO_MS = 2500;
 
@@ -590,12 +603,28 @@ export async function createGlobe(
     const i = Math.min(points.length - 2, Math.floor(progress * (points.length - 1)));
     const here = points[i];
     const next = points[i + 1];
+    const heading = next.clone().sub(here).normalize();
+    if (lastHeading.lengthSq() > 0) {
+      const side = heading.clone().cross(here).normalize();
+      turnRate = heading.clone().sub(lastHeading).dot(side) * 60;
+    }
+    lastHeading.copy(heading);
     plane.position.copy(here);
     plane.up.copy(here);
     plane.lookAt(next.clone().multiplyScalar(1.001));
     // hold the aircraft at a readable size however close the camera is
     const toCamera = camera.position.distanceTo(here);
-    plane.scale.setScalar(THREE.MathUtils.clamp(toCamera * 0.016, 0.004, 0.06));
+    const scale = THREE.MathUtils.clamp(toCamera * 0.024, 0.006, 0.08);
+    plane.scale.setScalar(scale);
+
+    // the shadow only makes sense near the ground
+    const low = phaseName === 'taxi' || phaseName === 'takeoff' || phaseName === 'landing';
+    blob.visible = showPlane && low;
+    if (blob.visible) {
+      blob.position.copy(here.clone().normalize().multiplyScalar(1.0008));
+      blob.lookAt(0, 0, 0);
+      blob.scale.setScalar(scale * 2.4);
+    }
     const drawn = Math.max(6, Math.floor(progress * SEGMENTS) * 8 * 6);
     flown.geometry.setDrawRange(0, drawn);
     ahead.geometry.setDrawRange(i, points.length - i);
@@ -630,8 +659,13 @@ export async function createGlobe(
 
   function render(now = performance.now()): void {
     sunDir.value = sunDirection(clock());
-    sunLight.position.copy(sunDir.value.clone().multiplyScalar(12));
-    model.update(now / 1000, progress);
+    sunLight.position.copy(sunDir.value).multiplyScalar(12);
+    // the fill leans towards day or night, depending where the aircraft is
+    if (points.length) {
+      const lit = plane.position.clone().normalize().dot(sunDir.value);
+      fill.intensity = 0.35 + Math.max(0, lit) * 0.9;
+    }
+    model.update(now / 1000, phaseName, turnRate);
 
     // the view changes itself every forty seconds unless you chose one
     if (showPlane && Date.now() > manualUntil && Date.now() - lastCycle > 40_000) {
@@ -828,6 +862,9 @@ export async function createGlobe(
     shake(strength = 1) {
       shakeUntil = performance.now() + 900 * strength;
       shakeAmount = 0.02 * strength;
+    },
+    setPhase(phase: string) {
+      phaseName = phase;
     },
     setProgress(t) {
       progress = Math.max(0, Math.min(1, t));

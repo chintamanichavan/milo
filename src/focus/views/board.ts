@@ -10,7 +10,7 @@ import {
   wings,
   type BoardRow,
 } from '../flightkit';
-import { planeGlyph } from '../planes';
+import { planeSilhouette } from '../aircraft3d';
 import {
   colourOf,
   dayKey,
@@ -141,7 +141,7 @@ export function focusBoardView(root: HTMLElement): () => void {
             : ''
         }
         <button class="big tap" data-done="1" id="takeoff">TAKE OFF</button>
-        <p class="line sub mid flying">${planeGlyph(aircraft, 40)}<span>flying the ${
+        <p class="line sub mid flying">${planeSilhouette(30, 1.5)}<span>flying the ${
           aircraft === 'paper' ? 'paper plane' : aircraft
         }</span>${wings(rankFor(landedHours(state)).name, 34)}<span>${
           rankFor(landedHours(state)).name

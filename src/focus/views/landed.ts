@@ -6,7 +6,7 @@ import { clock } from '../../ui/time';
 import { checkBadges } from '../achievements';
 import { airport, KM_TO_MI } from '../airports';
 import { arrivalFor, rankFor, wings, weatherAt } from '../flightkit';
-import { planeGlyph } from '../planes';
+import { planeSilhouette } from '../aircraft3d';
 import {
   dayKey,
   hh,
@@ -73,7 +73,7 @@ export function landedView(root: HTMLElement): () => void {
             })()
           : ''
       }
-      <p class="line sub flying">${planeGlyph(flight.aircraft ?? 'paper', 40)}</p>
+      <p class="line sub flying">${planeSilhouette(32, 1.5)}</p>
       <div class="tally">
         <div><b>${hh(today)}</b><span>today · ${dailyGoalH} h goal</span></div>
         <div><b>${hh(thisWeek)}</b><span>week · ${weeklyGoalH} h goal</span></div>
