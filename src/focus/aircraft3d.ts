@@ -13,6 +13,17 @@ export interface Plane3D {
 
 const SKIN = (): THREE.Material =>
   new THREE.MeshStandardMaterial({ color: 0xeef1f6, metalness: 0.35, roughness: 0.42 });
+/** painted per vertex: pale belly, grey crown, violet spine, dark cockpit */
+const PAINTED = (): THREE.Material =>
+  new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.45 });
+/** a back-face shell in near-black, so the silhouette reads over bright ground */
+const INK = (): THREE.Material =>
+  new THREE.MeshBasicMaterial({ color: 0x0a0e14, side: THREE.BackSide });
+
+const BELLY = new THREE.Color(0xeef1f6);
+const CROWN = new THREE.Color(0x9aa4b0);
+const SPINE = new THREE.Color(0xa78bfa);
+const COCKPIT = new THREE.Color(0x10151c);
 const DARK = (): THREE.Material =>
   new THREE.MeshStandardMaterial({ color: 0x4d545d, metalness: 0.5, roughness: 0.5 });
 const GLASS = (): THREE.Material =>
@@ -52,9 +63,71 @@ function fuselage(shape: Shape): THREE.Mesh {
     else r = shape.radius;
     points.push(new THREE.Vector2(Math.max(0.004, r), z));
   }
-  const mesh = new THREE.Mesh(new THREE.LatheGeometry(points, 18), SKIN());
+  const geometry = new THREE.LatheGeometry(points, 30);
+  paintBody(geometry, shape);
+  const mesh = new THREE.Mesh(geometry, PAINTED());
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
+}
+
+/**
+ * The livery, painted into the vertices: an airliner seen from above is a grey
+ * top with a violet spine and a dark band over the flight deck, not a white
+ * arrow. The lathe turns about its own Y, so local z is which way is up.
+ */
+function paintBody(geometry: THREE.BufferGeometry, shape: Shape): void {
+  const position = geometry.getAttribute('position');
+  const colours = new Float32Array(position.count * 3);
+  const colour = new THREE.Color();
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const station = position.getY(i);
+    const z = position.getZ(i);
+    const radius = Math.max(1e-5, Math.hypot(x, z));
+    const up = z / radius;
+    // the nose sits at the near end of the profile
+    const fromNose = (station + shape.length / 2) / shape.length;
+    colour.copy(BELLY).lerp(CROWN, THREE.MathUtils.smoothstep(up, -0.3, 0.3));
+    if (up > 0.62) colour.lerp(SPINE, THREE.MathUtils.smoothstep(up, 0.62, 0.9) * 0.85);
+    if (fromNose < 0.2 && up > 0.25)
+      colour.lerp(COCKPIT, THREE.MathUtils.smoothstep(up, 0.25, 0.5) * (1 - fromNose / 0.2));
+    colours[i * 3] = colour.r;
+    colours[i * 3 + 1] = colour.g;
+    colours[i * 3 + 2] = colour.b;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+}
+
+/** a wing is grey on top and pale underneath, for the same reason */
+function paintPlate(geometry: THREE.BufferGeometry, thickness: number): void {
+  const position = geometry.getAttribute('position');
+  const colours = new Float32Array(position.count * 3);
+  const colour = new THREE.Color();
+  for (let i = 0; i < position.count; i++) {
+    // the plate is extruded along its local z, and rotated so that z is down
+    colour.copy(CROWN).lerp(BELLY, THREE.MathUtils.smoothstep(position.getZ(i), 0, thickness));
+    colours[i * 3] = colour.r;
+    colours[i * 3 + 1] = colour.g;
+    colours[i * 3 + 2] = colour.b;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+}
+
+/** a near-black shell a shade larger than the thing itself, drawn inside out */
+function hull(target: THREE.Object3D, ink: THREE.Material, grow = 1.05): void {
+  const meshes: THREE.Mesh[] = [];
+  target.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (mesh.isMesh) meshes.push(mesh);
+  });
+  for (const mesh of meshes) {
+    const shell = new THREE.Mesh(mesh.geometry, ink);
+    shell.position.copy(mesh.position);
+    shell.rotation.copy(mesh.rotation);
+    shell.scale.copy(mesh.scale).multiplyScalar(grow);
+    shell.renderOrder = -1;
+    mesh.parent?.add(shell);
+  }
 }
 
 /** a swept planform, extruded thin, then given dihedral */
@@ -65,7 +138,7 @@ function wingPair(
   sweep: number,
   at: number,
   dihedral: number,
-  material = SKIN(),
+  thickness = 0.035,
 ): THREE.Group {
   const group = new THREE.Group();
   for (const side of [-1, 1]) {
@@ -75,10 +148,9 @@ function wingPair(
     outline.lineTo(span / 2, -chordTip / 2 - sweep);
     outline.lineTo(0, -chordRoot / 2);
     outline.closePath();
-    const wing = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(outline, { depth: 0.035, bevelEnabled: false }),
-      material,
-    );
+    const geometry = new THREE.ExtrudeGeometry(outline, { depth: thickness, bevelEnabled: false });
+    paintPlate(geometry, thickness);
+    const wing = new THREE.Mesh(geometry, PAINTED());
     wing.rotation.x = Math.PI / 2;
     wing.scale.x = side;
     wing.position.set(0, -0.02, at);
@@ -94,8 +166,9 @@ function nacelle(x: number, z: number, radius: number): THREE.Group {
   pod.rotation.x = Math.PI / 2;
   const lip = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * 0.12, 8, 16), SKIN());
   lip.position.z = radius * 1.5;
-  const pylon = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.3, radius * 1.4, radius * 1.6), SKIN());
-  pylon.position.y = radius * 0.9;
+  // the strut runs up and aft from the pod to the wing above it
+  const pylon = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.32, radius * 1.9, radius * 2.8), SKIN());
+  pylon.position.set(0, radius * 1.05, -radius * 1.3);
   group.add(pod, lip, pylon);
   group.position.set(x, -radius * 1.1, z);
   return group;
@@ -118,52 +191,74 @@ export function buildAircraft(id: string): Plane3D {
   let propeller: THREE.Mesh | null = null;
 
   if (id === 'paper') {
-    // a folded sheet, creased down the middle
+    // a folded dart: two halves creased up along the middle, a keel underneath,
+    // so that from straight above it reads as folded paper and not as an arrow
     for (const side of [-1, 1]) {
       const sheet = new THREE.Shape();
-      sheet.moveTo(0, 1.35);
-      sheet.lineTo(side * 0.92, -1.15);
-      sheet.lineTo(0, -0.62);
+      sheet.moveTo(0, 1.4);
+      sheet.lineTo(side * 0.98, -1.1);
+      sheet.lineTo(side * 0.46, -1.16);
+      sheet.lineTo(0, -0.58);
       sheet.closePath();
+      const geometry = new THREE.ExtrudeGeometry(sheet, { depth: 0.02, bevelEnabled: false });
+      paintPlate(geometry, 0.02);
       const wing = new THREE.Mesh(
-        new THREE.ExtrudeGeometry(sheet, { depth: 0.012, bevelEnabled: false }),
-        new THREE.MeshStandardMaterial({ color: 0xf6f8fc, roughness: 0.85, side: THREE.DoubleSide }),
+        geometry,
+        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide }),
       );
       wing.rotation.x = -Math.PI / 2;
-      wing.rotation.y = side * 0.12;
-      group.add(track(wing));
+      const fold = new THREE.Group();
+      // the crease lifts each half, which is what gives a dart its shading
+      fold.rotation.z = -side * 0.26;
+      fold.add(wing);
+      group.add(track(fold));
     }
-    const crease = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 2.4), LIVERY());
-    crease.position.y = 0.07;
+    const crease = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.2, 2.5), LIVERY());
+    crease.position.set(0, 0.1, 0.06);
     group.add(track(crease));
+    // the folded body hanging under the crease, in shadow from above
+    const keel = new THREE.Shape();
+    keel.moveTo(0.95, 0);
+    keel.lineTo(-1.1, 0);
+    keel.lineTo(-1.1, -0.26);
+    keel.lineTo(0.55, -0.02);
+    keel.closePath();
+    const body = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(keel, { depth: 0.02, bevelEnabled: false }),
+      new THREE.MeshStandardMaterial({ color: 0x8a939f, roughness: 0.85, side: THREE.DoubleSide }),
+    );
+    body.rotation.y = Math.PI / 2;
+    body.position.set(0.01, 0.02, 0);
+    group.add(track(body));
   } else {
     const shape = SHAPES[id] ?? SHAPES.airliner;
     group.add(track(fuselage(shape)));
 
     // wings
-    const chord = shape.delta ? shape.length * 0.62 : shape.length * 0.26;
-    group.add(
-      track(
-        wingPair(
-          chord,
-          shape.delta ? chord * 0.25 : chord * 0.45,
-          shape.span,
-          shape.sweep,
-          shape.delta ? -shape.length * 0.08 : -shape.length * 0.02,
-          shape.dihedral,
-        ),
+    const chord = shape.delta ? shape.length * 0.62 : shape.length * 0.34;
+    const wings = track(
+      wingPair(
+        chord,
+        shape.delta ? chord * 0.25 : chord * 0.55,
+        shape.span,
+        shape.sweep,
+        shape.delta ? -shape.length * 0.08 : -shape.length * 0.02,
+        shape.dihedral,
+        shape.radius * 0.34,
       ),
     );
+    group.add(wings);
     // tailplane and fin
     group.add(
       track(
         wingPair(
-          shape.length * 0.14,
-          shape.length * 0.07,
+          shape.length * 0.17,
+          shape.length * 0.09,
           shape.span * 0.38,
           shape.sweep * 0.5,
           -shape.length * 0.42,
           shape.dihedral * 0.5,
+          shape.radius * 0.24,
         ),
       ),
     );
@@ -206,15 +301,19 @@ export function buildAircraft(id: string): Plane3D {
       propeller.position.z = shape.length * 0.52;
       group.add(track(propeller));
     } else if (shape.engines) {
-      const radius = shape.radius * 0.62;
+      const radius = shape.radius * 0.72;
+      // a pod sits ahead of the leading edge at its station, so from above the
+      // engines read as engines and not as a smooth arrow
+      const nose = (fraction: number): number =>
+        -shape.length * 0.02 + chord / 2 - shape.sweep * fraction - radius * 0.4;
       const spots: [number, number][] =
         shape.engines === 2
-          ? [[-shape.span * 0.27, shape.length * 0.03], [shape.span * 0.27, shape.length * 0.03]]
+          ? [[-shape.span * 0.27, nose(0.54)], [shape.span * 0.27, nose(0.54)]]
           : [
-              [-shape.span * 0.34, shape.length * 0.02],
-              [-shape.span * 0.19, shape.length * 0.06],
-              [shape.span * 0.19, shape.length * 0.06],
-              [shape.span * 0.34, shape.length * 0.02],
+              [-shape.span * 0.34, nose(0.68)],
+              [-shape.span * 0.19, nose(0.38)],
+              [shape.span * 0.19, nose(0.38)],
+              [shape.span * 0.34, nose(0.68)],
             ];
       for (const [x, z] of spots) group.add(track(nacelle(x, z, radius)));
     }
@@ -252,6 +351,11 @@ export function buildAircraft(id: string): Plane3D {
     group.add(...landingLights);
   }
 
+  // an inside-out shell in near-black, so the shape separates from bright ground
+  const ink = INK();
+  disposables.push(ink);
+  hull(group, ink, id === 'paper' ? 1.05 : 1.035);
+
   let roll = 0;
   let pitch = 0;
 
@@ -268,9 +372,9 @@ export function buildAircraft(id: string): Plane3D {
       if (propeller) propeller.rotation.z = time * 26;
 
       // bank into the turn, pitch with the phase, and never sit perfectly still
-      const wantRoll = THREE.MathUtils.clamp(turnRate * 26, -0.44, 0.44);
+      const wantRoll = THREE.MathUtils.clamp(turnRate * 38, -0.62, 0.62);
       const wantPitch =
-        phase === 'takeoff' ? 0.22 : phase === 'climb' ? 0.14 : phase === 'descent' ? -0.09 : 0;
+        phase === 'takeoff' ? 0.3 : phase === 'climb' ? 0.2 : phase === 'descent' ? -0.14 : 0.03;
       roll += (wantRoll - roll) * 0.06;
       pitch += (wantPitch - pitch) * 0.05;
       group.rotation.z = roll + Math.sin(time * 1.25) * 0.005;
