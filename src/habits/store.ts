@@ -142,11 +142,19 @@ export function consistency(state: HabitState, habit: Habit, days = 30): number 
   return due ? Math.round((hit / due) * 100) : 0;
 }
 
+/** the day a habit was created, from its id */
+const bornOn = (habit: Habit): number => {
+  const stamp = Number(habit.id.split('-')[1]);
+  return Number.isFinite(stamp) ? stamp : 0;
+};
+
 /** missed yesterday? two days? the copy changes, never the colour */
 export function missState(state: HabitState, habit: Habit): 0 | 1 | 2 {
   let missed = 0;
   for (let i = 1; i <= 6 && missed < 2; i++) {
     const date = shift(-i);
+    // a habit cannot have missed a day that came before it
+    if (date.getTime() < bornOn(habit)) break;
     if (!dueOn(habit, date)) continue;
     const entry = entryFor(state, habit.id, dayKey(date));
     if (counts(entry?.mark) || entry?.mark === 'skip') break;
