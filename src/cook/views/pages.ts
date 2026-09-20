@@ -63,11 +63,15 @@ const card = (r: Recipe): string => `
   </a>`;
 
 async function paintThumbs(root: HTMLElement): Promise<void> {
-  for (const el of root.querySelectorAll<HTMLElement>('[data-photo]')) {
-    const id = el.dataset.photo;
-    if (!id) continue;
-    const url = await getPhoto(id);
-    if (url) el.style.backgroundImage = `url(${url})`;
+  const wanted = [...root.querySelectorAll<HTMLElement>('[data-photo]')].filter((el) => el.dataset.photo);
+  for (const el of wanted) {
+    const url = await getPhoto(el.dataset.photo!);
+    if (!url) continue;
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
+    await image.decode().catch(() => {});
+    el.style.backgroundImage = `url(${url})`;
   }
 }
 
@@ -78,8 +82,9 @@ export function cookHomeView(root: HTMLElement): () => void {
   let query = '';
   let category = '';
 
+  let shown = 48;
   const draw = (): void => {
-    const list = state.recipes.filter((r) => {
+    const all = state.recipes.filter((r) => {
       if (category === 'favourites' && !r.favourite) return false;
       if (category === 'want' && !r.wantToCook) return false;
       if (category && !['favourites', 'want'].includes(category) && !r.categories.includes(category))
@@ -88,9 +93,17 @@ export function cookHomeView(root: HTMLElement): () => void {
       const hay = `${r.title} ${r.tags.join(' ')} ${r.ingredients.map((i) => i.item).join(' ')}`.toLowerCase();
       return query.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
     });
-    root.querySelector('#recipeList')!.innerHTML = list.length
-      ? `<div class="recipe-grid">${list.map(card).join('')}</div>`
+    const list = all.slice(0, shown);
+    root.querySelector('#recipeList')!.innerHTML = all.length
+      ? `<div class="recipe-grid">${list.map(card).join('')}</div>` +
+        (all.length > list.length
+          ? `<button class="chip tap" id="moreRecipes">show ${all.length - list.length} more</button>`
+          : '')
       : '<p class="line sub">Nothing here yet. Add one, paste one, or import a file.</p>';
+    root.querySelector('#moreRecipes')?.addEventListener('click', () => {
+      shown += 48;
+      draw();
+    });
     void paintThumbs(root);
   };
 

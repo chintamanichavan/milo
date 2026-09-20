@@ -191,15 +191,19 @@ export interface BoardRow {
 }
 
 export function splitFlap(rows: BoardRow[]): string {
+  // animating every character is a lot of work for a decoration: cap it
+  let animated = 0;
   const cell = (text: string, width: number, delay: number): string =>
     `<span class="flap-word">${text
       .padEnd(width, ' ')
       .slice(0, width)
       .split('')
-      .map(
-        (char, i) =>
-          `<i class="flap" style="animation-delay:${delay + i * 28}ms">${char === ' ' ? '&nbsp;' : char}</i>`,
-      )
+      .map((char, i) => {
+        const flip = animated++ < 24;
+        return `<i class="flap${flip ? '' : ' still'}"${
+          flip ? ` style="animation-delay:${delay + i * 28}ms"` : ''
+        }>${char === ' ' ? '&nbsp;' : char}</i>`;
+      })
       .join('')}</span>`;
   return `<div class="flapboard">
     <div class="flaprow head"><span>time</span><span>flight</span><span>to</span><span>purpose</span><span>status</span></div>

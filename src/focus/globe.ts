@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { budget, Governor } from './quality';
 import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
 
@@ -28,6 +30,10 @@ export interface GlobeHandle {
 }
 
 const R = 1;
+
+/** One transcoder and one copy of each texture, however many globes come and go. */
+const textureCache = new Map<string, Promise<THREE.Texture>>();
+let sharedKtx2: KTX2Loader | null = null;
 const VIOLET = new THREE.Color('#a78bfa');
 const SKY = new THREE.Color('#9dc4ff');
 
@@ -74,6 +80,7 @@ const EARTH_FRAG = `
   uniform float cloudShift;
   uniform float cloudAmount;
   uniform float specAmount;
+  uniform float topoAmount;
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vViewDir;
@@ -86,7 +93,7 @@ const EARTH_FRAG = `
     float texel = 1.0 / 2048.0;
     float hx = texture2D(topoMap, vUv + vec2(texel, 0.0)).r - texture2D(topoMap, vUv - vec2(texel, 0.0)).r;
     float hy = texture2D(topoMap, vUv + vec2(0.0, texel)).r - texture2D(topoMap, vUv - vec2(0.0, texel)).r;
-    float relief = clamp(1.0 + (hx + hy) * 6.0, 0.75, 1.3);
+    float relief = mix(1.0, clamp(1.0 + (hx + hy) * 6.0, 0.75, 1.3), topoAmount);
 
     vec3 day = texture2D(dayMap, vUv).rgb * relief;
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 1.12);
@@ -198,7 +205,7 @@ export async function createGlobe(
   const clock = options.now ?? (() => new Date());
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, budget().dpr));
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -210,37 +217,63 @@ export async function createGlobe(
   const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
   camera.position.set(0, 0.4, 3.2);
 
-  const loader = new THREE.TextureLoader();
-  const load = (url: string, srgb: boolean): Promise<THREE.Texture> =>
-    new Promise((resolve) =>
-      loader.load(
-        url,
-        (texture) => {
-          texture.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-          texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          texture.generateMipmaps = true;
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-          texture.wrapS = THREE.RepeatWrapping;
-          resolve(texture);
-        },
-        undefined,
-        () => resolve(new THREE.Texture()),
-      ),
-    );
+  const limits = budget();
+  const anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  sharedKtx2 ??= new KTX2Loader().setTranscoderPath('/basis/');
+  const ktx2 = sharedKtx2.detectSupport(renderer);
+  const bitmapLoader = new THREE.ImageBitmapLoader();
+  bitmapLoader.setOptions({ imageOrientation: 'flipY' });
 
+  const dress = (texture: THREE.Texture, srgb: boolean): THREE.Texture => {
+    texture.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    texture.anisotropy = anisotropy;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+    return texture;
+  };
+
+  /** compressed if the device can transcode it, decoded off the main thread if not */
+  const loadOnce = (ktx: string, jpg: string, srgb: boolean): Promise<THREE.Texture> => {
+    const cached = textureCache.get(ktx);
+    if (cached) return cached;
+    const job = load(ktx, jpg, srgb);
+    textureCache.set(ktx, job);
+    return job;
+  };
+
+  const load = async (ktx: string, jpg: string, srgb: boolean): Promise<THREE.Texture> => {
+    try {
+      const texture = await ktx2.loadAsync(ktx);
+      return dress(texture, srgb);
+    } catch {
+      /* fall back to the jpeg */
+    }
+    try {
+      const bitmap = (await bitmapLoader.loadAsync(jpg)) as ImageBitmap;
+      const texture = new THREE.Texture(bitmap as unknown as HTMLImageElement);
+      texture.generateMipmaps = true;
+      return dress(texture, srgb);
+    } catch {
+      return new THREE.Texture();
+    }
+  };
+
+  const blank = new THREE.Texture();
   const [dayMap, nightMap, topoMap, waterMap, cloudMap] = await Promise.all([
-    load('/earth/day.jpg', true),
-    load('/earth/night.jpg', true),
-    load('/earth/topo.jpg', false),
-    load('/earth/water.jpg', false),
-    load('/earth/clouds.jpg', false),
+    loadOnce('/earth/day-4k.ktx2', '/earth/day.jpg', true),
+    loadOnce('/earth/night-2k.ktx2', '/earth/night.jpg', true),
+    limits.topo ? loadOnce('/earth/topo-2k.ktx2', '/earth/topo.jpg', false) : Promise.resolve(blank),
+    limits.water ? loadOnce('/earth/water-1k.ktx2', '/earth/water.jpg', false) : Promise.resolve(blank),
+    limits.clouds ? loadOnce('/earth/clouds-2k.ktx2', '/earth/clouds.jpg', false) : Promise.resolve(blank),
   ]);
 
   const sunDir = { value: sunDirection(clock()) };
   const cloudShift = { value: 0 };
 
   const earth = new THREE.Mesh(
-    new THREE.SphereGeometry(R, 160, 96),
+    new THREE.SphereGeometry(R, limits.sphereSegments[0], limits.sphereSegments[1]),
     new THREE.ShaderMaterial({
       uniforms: {
         dayMap: { value: dayMap },
@@ -250,8 +283,9 @@ export async function createGlobe(
         cloudMap: { value: cloudMap },
         sunDir,
         cloudShift,
-        cloudAmount: { value: 1 },
-        specAmount: { value: 1 },
+        cloudAmount: { value: limits.clouds ? 1 : 0 },
+        specAmount: { value: limits.water ? 1 : 0 },
+        topoAmount: { value: limits.topo ? 1 : 0 },
       },
       vertexShader: VERT,
       fragmentShader: EARTH_FRAG,
@@ -260,7 +294,7 @@ export async function createGlobe(
   scene.add(earth);
 
   const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(R * 1.06, 64, 48),
+    new THREE.SphereGeometry(R * 1.06, 48, 32),
     new THREE.ShaderMaterial({
       uniforms: { glow: { value: SKY }, tint: { value: VIOLET }, sunDir },
       vertexShader: VERT,
@@ -274,7 +308,7 @@ export async function createGlobe(
   scene.add(atmosphere);
 
   // stars: many, faint, gently twinkling
-  const STAR_COUNT = 2600;
+  const STAR_COUNT = limits.stars;
   const starGeo = new THREE.BufferGeometry();
   const positions = new Float32Array(STAR_COUNT * 3);
   const seeds = new Float32Array(STAR_COUNT);
@@ -585,6 +619,14 @@ export async function createGlobe(
   let quality: 'full' | 'low' = 'full';
   let raf = 0;
   let last = 0;
+  let onScreen = true;
+  /** drops the internal resolution before it drops frames */
+  const governor = new Governor((scale) => {
+    const rect = host.getBoundingClientRect();
+    renderer.setSize(Math.max(1, rect.width * scale), Math.max(1, rect.height * scale), false);
+    renderer.domElement.style.width = `${Math.round(rect.width)}px`;
+    renderer.domElement.style.height = `${Math.round(rect.height)}px`;
+  });
 
   function render(now = performance.now()): void {
     sunDir.value = sunDirection(clock());
@@ -663,6 +705,8 @@ export async function createGlobe(
     const gap = quality === 'low' ? 33 : 16;
     if (now - last < gap) return;
     last = now;
+    if (!onScreen) return;
+    governor.frame(now);
     render(now);
   }
 
@@ -681,10 +725,24 @@ export async function createGlobe(
 
   const observer = new ResizeObserver(() => resize());
   observer.observe(host);
+  // a canvas nobody can see costs nothing
+  const seen = new IntersectionObserver(
+    (entries) => {
+      onScreen = entries.some((entry) => entry.isIntersecting);
+      if (onScreen && running) render();
+    },
+    { threshold: 0.01 },
+  );
+  seen.observe(host);
   resize();
   if (route) buildRoute(route);
   resize();
-  raf = requestAnimationFrame(loop);
+  if (showPlane || interactive) raf = requestAnimationFrame(loop);
+  else {
+    // a still globe: draw it once, then only when something changes
+    running = false;
+    render();
+  }
 
   if (new URLSearchParams(location.search).has('test'))
     (window as unknown as { __milo: unknown }).__milo = {
@@ -709,6 +767,8 @@ export async function createGlobe(
         render();
       },
       sunDirection: () => sunDirection(clock()).toArray(),
+      fps: () => governor.fps(),
+      scale: () => governor.scale,
       projectVec: (x: number, y: number, z: number) => {
         const v = new THREE.Vector3(x, y, z).project(camera);
         const rect = host.getBoundingClientRect();
@@ -803,6 +863,7 @@ export async function createGlobe(
       running = false;
       cancelAnimationFrame(raf);
       observer.disconnect();
+      seen.disconnect();
       controls?.dispose();
       renderer.dispose();
       renderer.domElement.remove();

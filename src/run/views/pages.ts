@@ -7,6 +7,7 @@ import { PERSONAS, personaById } from '../coach';
 import { distanceLabel, paceLabel, routeSvg } from '../gps';
 import { buildIcs, downloadIcs, nextRunDay } from '../ics';
 import { PROGRAMMES, programmeById } from '../plans';
+import { applyTheme } from '../theme';
 import {
   deleteRun,
   graduated,
@@ -480,10 +481,4 @@ export function runSettingsView(root: HTMLElement): () => void {
     });
   });
   return () => {};
-}
-
-/** dark/light override from settings */
-export function applyTheme(): void {
-  const { theme } = load().settings;
-  document.documentElement.dataset.theme = theme === 'auto' ? '' : theme;
 }

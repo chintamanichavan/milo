@@ -1,4 +1,5 @@
 import { beep, say, stopSpeech } from '../../audio';
+import { setStyle, setText } from '../../ui/dom';
 import { toast } from '../../ui/toast';
 import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
@@ -131,8 +132,15 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   const pipFlown = root.querySelector<SVGPathElement>('#pipFlown')!;
   const pipPlane = root.querySelector<SVGCircleElement>('#pipPlane')!;
   const pipArc = root.querySelector<SVGPathElement>('#pipArc')!;
+  const pipLength = pipArc.getTotalLength();
   const stripFlown = root.querySelector<HTMLElement>('#stripFlown')!;
   const stripPlane = root.querySelector<HTMLElement>('#stripPlane')!;
+  const flownEl = root.querySelector<HTMLElement>('#flownKm')!;
+  const leftEl = root.querySelector<HTMLElement>('#leftKm')!;
+  const etaEl = root.querySelector<HTMLElement>('#eta')!;
+  const clockFromEl = root.querySelector<HTMLElement>('#clockFrom')!;
+  const clockToEl = root.querySelector<HTMLElement>('#clockTo')!;
+  const phaseLabel = root.querySelector<HTMLElement>('#phase')!;
 
   let sky: Sky | null = null;
   let mode: SkyMode = settings.sky;
@@ -161,7 +169,6 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   let halfway = false;
   let hiddenAt = 0;
   let phase: Phase | '' = '';
-  const phaseEl = () => root.querySelector<HTMLElement>('#phase');
 
   const speak = (line: string): void => {
     duckAmbient(true, settings.ambient.volume);
@@ -205,29 +212,25 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   function paint(): void {
     const e = Math.min(elapsed(), plannedSec);
     const t = e / plannedSec;
-    countEl.textContent = clock(plannedSec - e);
-    elapsedEl.textContent = clock(e);
-    fillEl.style.width = `${t * 100}%`;
-    markerEl.style.left = `${t * 100}%`;
+    setText(countEl, clock(plannedSec - e));
+    setText(elapsedEl, clock(e));
+    setStyle(fillEl, 'width', `${(t * 100).toFixed(2)}%`);
+    setStyle(markerEl, 'left', `${(t * 100).toFixed(2)}%`);
     stage.dataset.progress = String(Math.round(t * 100));
     sky?.setProgress(t);
 
     // the tracking never disappears: strip below, inset when the camera is close in
-    stripFlown.style.width = `${t * 100}%`;
-    stripPlane.style.left = `${t * 100}%`;
+    setStyle(stripFlown, 'width', `${(t * 100).toFixed(2)}%`);
+    setStyle(stripPlane, 'left', `${(t * 100).toFixed(2)}%`);
     const flownKm = Math.round(route.km * t);
-    root.querySelector('#flownKm')!.textContent = `${flownKm.toLocaleString('en-US')} km · ${Math.round(
-      flownKm * KM_TO_MI,
-    ).toLocaleString('en-US')} mi`;
-    root.querySelector('#leftKm')!.textContent = `${Math.round(
-      route.km - flownKm,
-    ).toLocaleString('en-US')} km left`;
-    root.querySelector('#eta')!.textContent = `ETA ${localTime(
-      route.to,
-      new Date(Date.now() + (plannedSec - e) * 1000),
-    )}`;
+    setText(
+      flownEl,
+      `${flownKm.toLocaleString('en-US')} km · ${Math.round(flownKm * KM_TO_MI).toLocaleString('en-US')} mi`,
+    );
+    setText(leftEl, `${Math.round(route.km - flownKm).toLocaleString('en-US')} km left`);
+    setText(etaEl, `ETA ${localTime(route.to, new Date(Date.now() + (plannedSec - e) * 1000))}`);
     pipFlown.style.strokeDasharray = `${t} 1`;
-    const at = pipArc.getPointAtLength(pipArc.getTotalLength() * t);
+    const at = pipArc.getPointAtLength(pipLength * t);
     pipPlane.setAttribute('cx', String(at.x));
     pipPlane.setAttribute('cy', String(at.y));
     const live = sky?.cameraMode?.() ?? CAMERAS[camIndex];
@@ -236,20 +239,15 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     const nextPhase = phaseAt(t);
     if (nextPhase !== phase) {
       phase = nextPhase;
-      const label = phaseEl();
-      if (label) label.textContent = PHASE_LABEL[nextPhase];
+      setText(phaseLabel, PHASE_LABEL[nextPhase]);
       stage.dataset.phase = nextPhase;
       speak(announcement(nextPhase, route.to.city));
       if (nextPhase === 'landing') beep('chime');
       // engines: loud on the roll, soft at altitude
       setEnginePower(nextPhase === 'takeoff' ? 1 : nextPhase === 'climb' ? 0.7 : nextPhase === 'descent' ? 0.4 : 0.25);
     }
-    if (Math.round(e) % 30 === 0) {
-      const from = root.querySelector('#clockFrom');
-      const to = root.querySelector('#clockTo');
-      if (from) from.textContent = `${route.from.iata} ${localTime(route.from)}`;
-      if (to) to.textContent = `${route.to.iata} ${localTime(route.to)}`;
-    }
+    setText(clockFromEl, `${route.from.iata} ${localTime(route.from)}`);
+    setText(clockToEl, `${route.to.iata} ${localTime(route.to)}`);
     if (!halfway && e >= plannedSec / 2) {
       halfway = true;
       beep('chime');
@@ -289,9 +287,9 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     clearTimeout(holdTimer);
     stage.classList.remove('holding');
   };
-  stage.addEventListener('pointerdown', holdStart);
+  stage.addEventListener('pointerdown', holdStart, { passive: true });
   for (const evt of ['pointerup', 'pointercancel', 'pointerleave'] as const)
-    stage.addEventListener(evt, holdEnd);
+    stage.addEventListener(evt, holdEnd, { passive: true });
   stage.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') record('diverted', elapsed());
   });
@@ -371,7 +369,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     }
   };
   for (const evt of ['pointerdown', 'keydown'] as const)
-    document.addEventListener(evt, wake, true);
+    document.addEventListener(evt, wake, { capture: true, passive: true });
 
   const ticker = window.setInterval(() => {
     paint();
@@ -404,7 +402,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     document.removeEventListener('visibilitychange', onVisible);
     window.removeEventListener('devicemotion', onMotion);
     for (const evt of ['pointerdown', 'keydown'] as const)
-      document.removeEventListener(evt, wake, true);
+      document.removeEventListener(evt, wake, { capture: true } as EventListenerOptions);
     document.body.classList.remove('dim');
     void lock?.release();
     stopSpeech();

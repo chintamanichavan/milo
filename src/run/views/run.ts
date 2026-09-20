@@ -1,5 +1,6 @@
 import { beep, metronome, say, stopMetronome, stopSpeech } from '../../audio';
 import { now, whenAdvanced } from '../../clock';
+import { setStyle, setText } from '../../ui/dom';
 import { clock, shortDuration } from '../../ui/time';
 import { cueLine, personaById } from '../coach';
 import { distanceLabel, paceLabel, Tracker } from '../gps';
@@ -123,10 +124,10 @@ export function runView(
 
   function paintDistance(): void {
     if (!tracker) return;
-    distEl.textContent = `${distanceLabel(tracker.distanceKm, settings.units)} · ${paceLabel(
+    setText(distEl, `${distanceLabel(tracker.distanceKm, settings.units)} · ${paceLabel(
       tracker.lastSpeedKmh > 0.5 ? 3600 / tracker.lastSpeedKmh : 0,
       settings.units,
-    )}`;
+    )}`);
   }
 
   function countIn(): void {
@@ -134,7 +135,7 @@ export function runView(
     const want = left > 2600 ? '3' : left > 1600 ? '2' : left > 600 ? '1' : 'GO';
     if (want !== digit) {
       digit = want;
-      digitEl.textContent = want;
+      setText(digitEl, want);
       replay(digitEl, 'beat');
       if (want === 'GO') {
         beep('go');
@@ -169,15 +170,18 @@ export function runView(
     // a segment measured in kilometres ends when the distance lands
     if (seg.untilKm && tracker && tracker.runKm >= seg.untilKm) return finish(e, false);
 
-    countEl.textContent = clock(spot.remaining);
-    nextEl.textContent = next
-      ? `next · ${next.kind} ${shortDuration(next.sec)}`
-      : seg.untilKm
-        ? `next · ${seg.untilKm} km in`
-        : 'next · the finish';
-    elapsedEl.textContent = clock(e);
-    litEl.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
-    markerEl.style.left = `${pct}%`;
+    setText(countEl, clock(spot.remaining));
+    setText(
+      nextEl,
+      next
+        ? `next · ${next.kind} ${shortDuration(next.sec)}`
+        : seg.untilKm
+          ? `next · ${seg.untilKm} km in`
+          : 'next · the finish',
+    );
+    setText(elapsedEl, clock(e));
+    setStyle(litEl, 'clip-path', `inset(0 ${(100 - pct).toFixed(2)}% 0 0)`);
+    setStyle(markerEl, 'left', `${pct.toFixed(2)}%`);
 
     if (spot.index !== cued) {
       cued = spot.index;
@@ -271,9 +275,9 @@ export function runView(
     clearTimeout(holdTimer);
     stage.classList.remove('holding');
   };
-  stage.addEventListener('pointerdown', holdStart);
+  stage.addEventListener('pointerdown', holdStart, { passive: true });
   for (const evt of ['pointerup', 'pointercancel', 'pointerleave'] as const)
-    stage.addEventListener(evt, holdEnd);
+    stage.addEventListener(evt, holdEnd, { passive: true });
   stage.addEventListener('keydown', (ev) => {
     if (ev.key === ' ' || ev.key === 'Enter') {
       ev.preventDefault();
@@ -291,7 +295,7 @@ export function runView(
     document.body.classList.remove('dim');
   };
   for (const evt of ['pointerdown', 'keydown'] as const)
-    document.addEventListener(evt, wake, true);
+    document.addEventListener(evt, wake, { capture: true, passive: true });
 
   const ticker = window.setInterval(() => {
     paint();
@@ -320,7 +324,7 @@ export function runView(
     whenAdvanced(null);
     document.removeEventListener('visibilitychange', onVisible);
     for (const evt of ['pointerdown', 'keydown'] as const)
-      document.removeEventListener(evt, wake, true);
+      document.removeEventListener(evt, wake, { capture: true } as EventListenerOptions);
     document.body.classList.remove('dim');
     void lock?.release();
     stopSpeech();

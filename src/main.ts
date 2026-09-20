@@ -1,141 +1,164 @@
 import { registerSW } from 'virtual:pwa-register';
 import './style.css';
 import { advance } from './clock';
-import {
-  cookHomeView,
-  cookModeView,
-  plannerView,
-  recipeEditView,
-  recipeView,
-  shoppingView,
-} from './cook/views/pages';
-import {
-  habitDetailView,
-  habitNewView,
-  habitsTodayView,
-  lessonsView,
-  manageView,
-  reflectView,
-  templatesView,
-} from './habits/views/pages';
-import {
-  fuelTodayView,
-  nutrientsView,
-  programView,
-  trendsView,
-  weightView,
-} from './fuel/views/pages';
+import { applyTheme } from './run/theme';
 import { mountNav, setActiveTab, type Tab } from './ui/nav';
-import { focusBoardView } from './focus/views/board';
-import { flightView } from './focus/views/flight';
-import { landedView } from './focus/views/landed';
-import {
-  badgesView,
-  focusSettingsView,
-  hangarView,
-  routesView,
-  statsView,
-} from './focus/views/pages';
-import { liftExerciseView } from './lift/views/exercise';
-import { liftSessionView } from './lift/views/session';
-import {
-  bodyView,
-  libraryView,
-  liftHistoryView,
-  liftSettingsView,
-  liftStatsView,
-  progressView,
-  routineEditView,
-  routinesView,
-} from './lift/views/pages';
-import { liftTodayView } from './lift/views/today';
-import { doneView } from './run/views/done';
-import {
-  applyTheme,
-  certificateView,
-  plansView,
-  runHistoryView,
-  runSettingsView,
-  tipsView,
-} from './run/views/pages';
-import { runView } from './run/views/run';
-import { todayView } from './run/views/today';
 
 const app = document.getElementById('app')!;
 let cleanup: () => void = () => {};
+let token = 0;
 
-function route(): void {
+/** Each tab is its own chunk, fetched the first time you open it. */
+const chunks = {
+  run: () => import('./run/views/today'),
+  runPages: () => import('./run/views/pages'),
+  runEngine: () => import('./run/views/run'),
+  runDone: () => import('./run/views/done'),
+  lift: () => import('./lift/views/today'),
+  liftSession: () => import('./lift/views/session'),
+  liftExercise: () => import('./lift/views/exercise'),
+  liftPages: () => import('./lift/views/pages'),
+  focus: () => import('./focus/views/board'),
+  focusFlight: () => import('./focus/views/flight'),
+  focusLanded: () => import('./focus/views/landed'),
+  focusPages: () => import('./focus/views/pages'),
+  cook: () => import('./cook/views/pages'),
+  fuel: () => import('./fuel/views/pages'),
+  habits: () => import('./habits/views/pages'),
+};
+
+async function route(): Promise<void> {
+  const mine = ++token;
   cleanup();
   const parts = location.hash.replace(/^#\/?/, '').split('/');
   document.body.dataset.view = [parts[0] || 'today', parts[1]].filter(Boolean).join('-');
-  if (parts[0] === 'run' && parts[1] === 'history') cleanup = runHistoryView(app);
-  else if (parts[0] === 'run' && parts[1] === 'tips') cleanup = tipsView(app);
-  else if (parts[0] === 'run' && parts[1] === 'plans') cleanup = plansView(app);
-  else if (parts[0] === 'run' && parts[1] === 'settings') cleanup = runSettingsView(app);
-  else if (parts[0] === 'run' && parts[1] === 'certificate') cleanup = certificateView(app);
-  else if (parts[0] === 'run' && Number.isNaN(Number(parts[1])) && parts[1])
-    // #/run/<programme>/<week>/<run>
-    cleanup = runView(app, Number(parts[2]) || 1, Number(parts[3]) || 1, parts[1]);
-  else if (parts[0] === 'run') cleanup = runView(app, Number(parts[1]) || 1, Number(parts[2]) || 1);
-  else if (parts[0] === 'done') cleanup = doneView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'session') cleanup = liftSessionView(app, parts[2]);
-  else if (parts[0] === 'lift' && parts[1] === 'exercise') cleanup = liftExerciseView(app, parts[2]);
-  else if (parts[0] === 'lift' && parts[1]?.startsWith('library')) cleanup = libraryView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'routines') cleanup = routinesView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'routine') cleanup = routineEditView(app, parts[2]);
-  else if (parts[0] === 'lift' && parts[1] === 'history') cleanup = liftHistoryView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'body') cleanup = bodyView(app);
-  else if (parts[0] === 'lift' && parts[1]?.startsWith('stats')) cleanup = liftStatsView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'progress') cleanup = progressView(app);
-  else if (parts[0] === 'lift' && parts[1] === 'settings') cleanup = liftSettingsView(app);
-  else if (parts[0] === 'lift') cleanup = liftTodayView(app);
-  else if (parts[0] === 'focus' && parts[1] === 'flight')
-    cleanup = flightView(app, Number(parts[2]) || 25, decodeURIComponent(parts[3] ?? ''));
-  else if (parts[0] === 'focus' && parts[1] === 'landed') cleanup = landedView(app);
-  else if (parts[0] === 'focus' && parts[1] === 'routes') cleanup = routesView(app);
-  else if (parts[0] === 'focus' && parts[1] === 'hangar') cleanup = hangarView(app);
-  else if (parts[0] === 'focus' && parts[1] === 'badges') cleanup = badgesView(app);
-  else if (parts[0] === 'focus' && parts[1]?.startsWith('stats')) cleanup = statsView(app);
-  else if (parts[0] === 'focus' && parts[1] === 'settings') cleanup = focusSettingsView(app);
-  else if (parts[0] === 'focus') cleanup = focusBoardView(app);
-  else if (parts[0] === 'cook' && parts[1] === 'recipe') cleanup = recipeView(app, parts[2]);
-  else if (parts[0] === 'cook' && parts[1] === 'edit') cleanup = recipeEditView(app, parts[2]);
-  else if (parts[0] === 'cook' && parts[1] === 'new') cleanup = recipeEditView(app);
-  else if (parts[0] === 'cook' && parts[1] === 'mode') cleanup = cookModeView(app, parts[2]);
-  else if (parts[0] === 'cook' && parts[1] === 'list') cleanup = shoppingView(app);
-  else if (parts[0] === 'cook' && parts[1] === 'plan') cleanup = plannerView(app);
-  else if (parts[0] === 'cook') cleanup = cookHomeView(app);
-  else if (parts[0] === 'fuel' && parts[1] === 'nutrients') cleanup = nutrientsView(app);
-  else if (parts[0] === 'fuel' && parts[1] === 'weight') cleanup = weightView(app);
-  else if (parts[0] === 'fuel' && parts[1] === 'trends') cleanup = trendsView(app);
-  else if (parts[0] === 'fuel' && parts[1] === 'program') cleanup = programView(app);
-  else if (parts[0] === 'fuel') cleanup = fuelTodayView(app);
-  else if (parts[0] === 'habits' && parts[1] === 'new') cleanup = habitNewView(app);
-  else if (parts[0] === 'habits' && parts[1] === 'edit') cleanup = habitNewView(app, parts[2]);
-  else if (parts[0] === 'habits' && parts[1] === 'habit') cleanup = habitDetailView(app, parts[2]);
-  else if (parts[0] === 'habits' && parts[1] === 'templates') cleanup = templatesView(app);
-  else if (parts[0] === 'habits' && parts[1] === 'lessons') cleanup = lessonsView(app);
-  else if (parts[0] === 'habits' && parts[1] === 'reflect') cleanup = reflectView(app);
-  else if (parts[0] === 'habits' && parts[1] === 'manage') cleanup = manageView(app);
-  else if (parts[0] === 'habits') cleanup = habitsTodayView(app);
-  else cleanup = todayView(app);
   const tab = (parts[0] || 'run') as Tab;
   setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits'].includes(tab) ? tab : 'run');
+
+  const mount = (next: () => void): void => {
+    // a slow chunk must never render over a newer route
+    if (mine === token) next();
+  };
+
+  const [a, b, c, d] = parts;
+  if (a === 'run' && b === 'history') (await chunks.runPages()).runHistoryView(app);
+  else if (a === 'run' && b === 'tips') (await chunks.runPages()).tipsView(app);
+  else if (a === 'run' && b === 'plans') (await chunks.runPages()).plansView(app);
+  else if (a === 'run' && b === 'settings') (await chunks.runPages()).runSettingsView(app);
+  else if (a === 'run' && b === 'certificate') (await chunks.runPages()).certificateView(app);
+  else if (a === 'run' && b && Number.isNaN(Number(b))) {
+    const { runView } = await chunks.runEngine();
+    mount(() => (cleanup = runView(app, Number(c) || 1, Number(d) || 1, b)));
+  } else if (a === 'run') {
+    const { runView } = await chunks.runEngine();
+    mount(() => (cleanup = runView(app, Number(b) || 1, Number(c) || 1)));
+  } else if (a === 'done') {
+    const { doneView } = await chunks.runDone();
+    mount(() => (cleanup = doneView(app)));
+  } else if (a === 'lift' && b === 'session') {
+    const { liftSessionView } = await chunks.liftSession();
+    mount(() => (cleanup = liftSessionView(app, c)));
+  } else if (a === 'lift' && b === 'exercise') {
+    const { liftExerciseView } = await chunks.liftExercise();
+    mount(() => (cleanup = liftExerciseView(app, c)));
+  } else if (a === 'lift' && b?.startsWith('library')) (await chunks.liftPages()).libraryView(app);
+  else if (a === 'lift' && b === 'routines') (await chunks.liftPages()).routinesView(app);
+  else if (a === 'lift' && b === 'routine') (await chunks.liftPages()).routineEditView(app, c);
+  else if (a === 'lift' && b === 'history') (await chunks.liftPages()).liftHistoryView(app);
+  else if (a === 'lift' && b === 'body') (await chunks.liftPages()).bodyView(app);
+  else if (a === 'lift' && b?.startsWith('stats')) (await chunks.liftPages()).liftStatsView(app);
+  else if (a === 'lift' && b === 'progress') (await chunks.liftPages()).progressView(app);
+  else if (a === 'lift' && b === 'settings') (await chunks.liftPages()).liftSettingsView(app);
+  else if (a === 'lift') {
+    const { liftTodayView } = await chunks.lift();
+    mount(() => (cleanup = liftTodayView(app)));
+  } else if (a === 'focus' && b === 'flight') {
+    const { flightView } = await chunks.focusFlight();
+    mount(() => (cleanup = flightView(app, Number(c) || 25, decodeURIComponent(d ?? ''))));
+  } else if (a === 'focus' && b === 'landed') {
+    const { landedView } = await chunks.focusLanded();
+    mount(() => (cleanup = landedView(app)));
+  } else if (a === 'focus' && b === 'routes') {
+    const { routesView } = await chunks.focusPages();
+    mount(() => (cleanup = routesView(app)));
+  } else if (a === 'focus' && b === 'hangar') (await chunks.focusPages()).hangarView(app);
+  else if (a === 'focus' && b === 'badges') (await chunks.focusPages()).badgesView(app);
+  else if (a === 'focus' && b?.startsWith('stats')) (await chunks.focusPages()).statsView(app);
+  else if (a === 'focus' && b === 'settings') (await chunks.focusPages()).focusSettingsView(app);
+  else if (a === 'focus') {
+    const { focusBoardView } = await chunks.focus();
+    mount(() => (cleanup = focusBoardView(app)));
+  } else if (a === 'cook' && b === 'recipe') (await chunks.cook()).recipeView(app, c);
+  else if (a === 'cook' && b === 'edit') (await chunks.cook()).recipeEditView(app, c);
+  else if (a === 'cook' && b === 'new') (await chunks.cook()).recipeEditView(app);
+  else if (a === 'cook' && b === 'mode') {
+    const { cookModeView } = await chunks.cook();
+    mount(() => (cleanup = cookModeView(app, c)));
+  } else if (a === 'cook' && b === 'list') (await chunks.cook()).shoppingView(app);
+  else if (a === 'cook' && b === 'plan') (await chunks.cook()).plannerView(app);
+  else if (a === 'cook') (await chunks.cook()).cookHomeView(app);
+  else if (a === 'fuel' && b === 'nutrients') (await chunks.fuel()).nutrientsView(app);
+  else if (a === 'fuel' && b === 'weight') (await chunks.fuel()).weightView(app);
+  else if (a === 'fuel' && b === 'trends') (await chunks.fuel()).trendsView(app);
+  else if (a === 'fuel' && b === 'program') (await chunks.fuel()).programView(app);
+  else if (a === 'fuel') (await chunks.fuel()).fuelTodayView(app);
+  else if (a === 'habits' && b === 'new') (await chunks.habits()).habitNewView(app);
+  else if (a === 'habits' && b === 'edit') (await chunks.habits()).habitNewView(app, c);
+  else if (a === 'habits' && b === 'habit') (await chunks.habits()).habitDetailView(app, c);
+  else if (a === 'habits' && b === 'templates') (await chunks.habits()).templatesView(app);
+  else if (a === 'habits' && b === 'lessons') (await chunks.habits()).lessonsView(app);
+  else if (a === 'habits' && b === 'reflect') (await chunks.habits()).reflectView(app);
+  else if (a === 'habits' && b === 'manage') (await chunks.habits()).manageView(app);
+  else if (a === 'habits') (await chunks.habits()).habitsTodayView(app);
+  else {
+    const { todayView } = await chunks.run();
+    mount(() => (cleanup = todayView(app)));
+  }
   scrollTo(0, 0);
 }
 
 applyTheme();
 mountNav();
-addEventListener('hashchange', route);
-route();
+addEventListener('hashchange', () => void route(), { passive: true });
+void route();
+
+// the tab you are about to press is already on its way
+document.addEventListener(
+  'pointerdown',
+  (ev) => {
+    const tab = (ev.target as HTMLElement).closest<HTMLAnchorElement>('.navtab[href]');
+    if (!tab) return;
+    const where = tab.getAttribute('href') ?? '';
+    if (where.includes('lift')) void chunks.lift();
+    else if (where.includes('focus')) void chunks.focus();
+    else if (where.includes('cook')) void chunks.cook();
+    else if (where.includes('fuel')) void chunks.fuel();
+    else if (where.includes('habits')) void chunks.habits();
+    else void chunks.run();
+  },
+  { passive: true, capture: true },
+);
 
 if (new URLSearchParams(location.search).has('test'))
   (window as unknown as { __c25k: unknown }).__c25k = {
     tick: (seconds: number) => advance(seconds * 1000),
-    /** force the sun somewhere, so day and night can both be photographed */
     sunAt: (iso: string) => {
       (window as unknown as { __c25kSun?: string }).__c25kSun = iso;
     },
   };
 
-registerSW({ immediate: true });
+// a new version waits until you are on a board screen, never mid-flight
+const updateSW = registerSW({
+  immediate: false,
+  onNeedRefresh() {
+    const settle = (): void => {
+      const view = document.body.dataset.view ?? '';
+      const busy = view.startsWith('run-') || view.startsWith('focus-flight') || view.startsWith('lift-session');
+      if (busy) return;
+      window.removeEventListener('hashchange', settle);
+      void updateSW(true);
+    };
+    window.addEventListener('hashchange', settle);
+    settle();
+  },
+});

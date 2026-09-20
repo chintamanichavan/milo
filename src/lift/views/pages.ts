@@ -63,8 +63,9 @@ export function libraryView(root: HTMLElement): () => void {
   let gear = '';
   let favesOnly = false;
 
+  let shown = 60;
   const draw = (): void => {
-    const list = allExercises(state).filter((e) => {
+    const all = allExercises(state).filter((e) => {
       if (favesOnly && !state.favourites.includes(e.id)) return false;
       if (muscle && e.muscle !== muscle) return false;
       if (gear && e.gear !== gear) return false;
@@ -75,7 +76,8 @@ export function libraryView(root: HTMLElement): () => void {
         .split(/\s+/)
         .every((word) => hay.includes(word));
     });
-    root.querySelector('#libList')!.innerHTML = list.length
+    const list = all.slice(0, shown);
+    root.querySelector('#libList')!.innerHTML = all.length
       ? list
           .map(
             (e) => `<details class="day ex-row"><summary>
@@ -90,8 +92,15 @@ export function libraryView(root: HTMLElement): () => void {
                 <a class="link tap" href="#/lift/exercise/${e.id}">history</a>
               </div></details>`,
           )
-          .join('')
+          .join('') +
+        (all.length > list.length
+          ? `<button class="chip tap" id="more">show ${all.length - list.length} more</button>`
+          : '')
       : '<p class="line sub">Nothing matches that.</p>';
+    root.querySelector('#more')?.addEventListener('click', () => {
+      shown += 60;
+      draw();
+    });
   };
 
   root.innerHTML = shell(

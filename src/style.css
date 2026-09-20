@@ -190,16 +190,30 @@ a {
 }
 
 #start {
-  animation: breathe 2s ease-in-out infinite;
+  position: relative;
+  isolation: isolate;
+}
+
+#start::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -6px;
+  border-radius: var(--r);
+  background: var(--glow);
+  filter: blur(10px);
+  opacity: 0.55;
+  animation: breathe 2.4s ease-in-out infinite;
+  will-change: opacity;
 }
 
 @keyframes breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 var(--glow), 0 0 24px -6px var(--glow);
+    opacity: 0.42;
   }
   50% {
-    box-shadow: 0 0 0 4px transparent, 0 0 28px -2px var(--glow);
+    opacity: 0.7;
   }
 }
 
@@ -1254,6 +1268,8 @@ a.ex-name {
 }
 
 .panel {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
   display: grid;
   gap: var(--u);
   margin-bottom: calc(var(--u) * 3);
@@ -2084,6 +2100,7 @@ body[data-view='done'] .tabbar {
 
 .thumb,
 .hero-photo {
+  aspect-ratio: 16 / 10;
   display: block;
   background: var(--panel) center / cover no-repeat;
   border-radius: var(--r);
@@ -2528,6 +2545,7 @@ body[data-view='done'] .tabbar {
 }
 
 .flap {
+  will-change: transform;
   display: inline-flex;
   width: 0.72em;
   padding: 3px 0;
@@ -2538,6 +2556,11 @@ body[data-view='done'] .tabbar {
   font-style: normal;
   animation: flip 0.32s ease-out both;
   transform-origin: 50% 0;
+}
+
+.flap.still {
+  animation: none;
+  will-change: auto;
 }
 
 @keyframes flip {

@@ -1,6 +1,7 @@
 import { miloMark } from '../../badge';
 import { now, whenAdvanced } from '../../clock';
 import { toast } from '../../ui/toast';
+import { setText } from '../../ui/dom';
 import { clock } from '../../ui/time';
 import { checkBadges } from '../achievements';
 import { airport, KM_TO_MI } from '../airports';
@@ -113,7 +114,7 @@ export function landedView(root: HTMLElement): () => void {
   const paint = (): void => {
     if (!endsAt) return;
     const left = (endsAt - now()) / 1000;
-    clockEl.textContent = clock(Math.max(0, left));
+    setText(clockEl, clock(Math.max(0, left)));
     if (left > 0) return;
     stop();
     // chain flights: straight back out to the runway

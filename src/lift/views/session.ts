@@ -1,6 +1,7 @@
 import { beep, say, unlockAudio } from '../../audio';
 import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
+import { setText } from '../../ui/dom';
 import { clock } from '../../ui/time';
 import { toast } from '../../ui/toast';
 import { alternatives, type RoutineItem } from '../data';
@@ -411,10 +412,10 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
   paint();
 
   function paint(): void {
-    clockEl.textContent = clock((now() - active.startedAt) / 1000);
+    setText(clockEl, clock((now() - active.startedAt) / 1000));
     if (!resting) return;
     const left = (restEnd - now()) / 1000;
-    restClock.textContent = clock(Math.max(0, left));
+    setText(restClock, clock(Math.max(0, left)));
     if (left <= 0) {
       stopRest();
       beep('run');
