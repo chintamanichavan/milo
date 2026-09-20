@@ -1,4 +1,4 @@
-import { miloMark, tabBar } from '../../badge';
+import { miloMark } from '../../badge';
 import { barList, columns, lineChart } from '../../ui/chart';
 import { sheet } from '../../ui/sheet';
 import { clock, dayKey } from '../../ui/time';
@@ -47,7 +47,6 @@ const shell = (active: string, body: string): string => `
   <section class="today lift-page detail">
     <header class="head">
       <span class="wordmark">${miloMark()}<b>MILO</b></span>
-      ${tabBar('lift')}
     </header>
     ${liftSubNav(active)}
     ${body}

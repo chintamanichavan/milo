@@ -1,4 +1,4 @@
-import { miloMark, tabBar } from '../../badge';
+import { miloMark } from '../../badge';
 import { exportFile, importFile } from '../store';
 import { sheet } from '../../ui/sheet';
 import { clock, longClock } from '../../ui/time';
@@ -32,7 +32,6 @@ const shell = (active: string, body: string): string => `
   <section class="today detail">
     <header class="head">
       <span class="wordmark">${miloMark()}<b>MILO</b></span>
-      ${tabBar('run')}
     </header>
     ${runSubNav(active)}
     ${body}

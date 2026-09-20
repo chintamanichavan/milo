@@ -16,16 +16,3 @@ export function watchGlyph(): string {
     <path d="M7.4 14.8l.4 2.6h4.4l.4-2.6"/><path d="M10 8.2V10.4h1.9"/>
   </svg>`;
 }
-
-export type Tab = 'run' | 'lift' | 'focus';
-
-/** The three halves of the app. */
-export function tabBar(active: Tab): string {
-  const tab = (id: Tab, label: string, href: string): string =>
-    `<a class="tab tap${active === id ? ' on' : ''}" href="${href}">${label}</a>`;
-  return `<nav class="tabs">${tab('run', 'RUN', '#/')}${tab('lift', 'LIFT', '#/lift')}${tab(
-    'focus',
-    'FOCUS',
-    '#/focus',
-  )}</nav>`;
-}

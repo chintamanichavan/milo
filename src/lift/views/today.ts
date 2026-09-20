@@ -1,4 +1,4 @@
-import { miloMark, tabBar } from '../../badge';
+import { miloMark } from '../../badge';
 import { barList } from '../../ui/chart';
 import { liftSubNav } from './pages';
 import { REST_DEFAULT } from '../data';
@@ -81,7 +81,6 @@ export function liftTodayView(root: HTMLElement): () => void {
     <section class="today">
       <header class="head">
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
-        ${tabBar('lift')}
       </header>
       ${liftSubNav('')}
       <div class="hero">

@@ -1,4 +1,4 @@
-import { miloMark, tabBar } from '../../badge';
+import { miloMark } from '../../badge';
 import { lineChart } from '../../ui/chart';
 import { sheet } from '../../ui/sheet';
 import { toast } from '../../ui/toast';
@@ -80,7 +80,6 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
     <section class="today lift-page detail">
       <header class="head">
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
-        ${tabBar('lift')}
       </header>
       ${liftSubNav('library')}
       <div class="hero">

@@ -1,5 +1,5 @@
 import { unlockAudio } from '../../audio';
-import { miloMark, tabBar, watchGlyph } from '../../badge';
+import { miloMark, watchGlyph } from '../../badge';
 import { toast } from '../../ui/toast';
 import { nextRunDay } from '../ics';
 import { planOf, programmeById } from '../plans';
@@ -62,7 +62,6 @@ export function todayView(root: HTMLElement): () => void {
     <section class="today${celebrate ? ' celebrate' : ''}">
       <header class="head">
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
-        ${tabBar('run')}
       </header>
       ${runSubNav('')}
       <div class="hero">

@@ -1,6 +1,7 @@
 import { registerSW } from 'virtual:pwa-register';
 import './style.css';
 import { advance } from './clock';
+import { mountNav, setActiveTab, type Tab } from './ui/nav';
 import { focusBoardView } from './focus/views/board';
 import { flightView } from './focus/views/flight';
 import { landedView } from './focus/views/landed';
@@ -74,10 +75,13 @@ function route(): void {
   else if (parts[0] === 'focus' && parts[1] === 'settings') cleanup = focusSettingsView(app);
   else if (parts[0] === 'focus') cleanup = focusBoardView(app);
   else cleanup = todayView(app);
+  const tab = (parts[0] || 'run') as Tab;
+  setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits'].includes(tab) ? tab : 'run');
   scrollTo(0, 0);
 }
 
 applyTheme();
+mountNav();
 addEventListener('hashchange', route);
 route();
 

@@ -1,5 +1,5 @@
 import { unlockAudio } from '../../audio';
-import { miloMark, tabBar } from '../../badge';
+import { miloMark } from '../../badge';
 import { sheet } from '../../ui/sheet';
 import { planRoute } from '../airports';
 import { planeGlyph } from '../planes';
@@ -72,7 +72,6 @@ export function focusBoardView(root: HTMLElement): () => void {
     <section class="today focus">
       <header class="head">
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
-        ${tabBar('focus')}
       </header>
       ${subNav('')}
       <div class="hero">
