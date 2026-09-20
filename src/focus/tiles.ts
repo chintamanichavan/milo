@@ -34,10 +34,38 @@ const latToTile = (lat: number, z: number): number => {
 
 interface Tile {
   mesh: THREE.Mesh;
-  material: THREE.MeshBasicMaterial;
+  material: THREE.ShaderMaterial;
   used: number;
   ready: boolean;
+  zoom: number;
 }
+
+// the imagery has to take the same light as the map underneath it, and step
+// aside at night so the city lights show through
+const TILE_VERT = `
+  varying vec2 vUv;
+  varying vec3 vNormalW;
+  void main() {
+    vUv = uv;
+    vNormalW = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const TILE_FRAG = `
+  uniform sampler2D map;
+  uniform vec3 sunDir;
+  uniform float fade;
+  uniform float ready;
+  varying vec2 vUv;
+  varying vec3 vNormalW;
+  void main() {
+    float lit = dot(normalize(vNormalW), normalize(sunDir));
+    float dayAmount = smoothstep(-0.10, 0.11, lit);
+    vec3 col = texture2D(map, vUv).rgb * (0.25 + 1.05 * max(lit, 0.0));
+    gl_FragColor = vec4(col, fade * dayAmount * ready);
+  }
+`;
 
 export interface TileLayer {
   /** called with where the camera is looking and how far away it is */
@@ -47,7 +75,7 @@ export interface TileLayer {
   dispose(): void;
 }
 
-export function createTileLayer(scene: THREE.Scene): TileLayer {
+export function createTileLayer(scene: THREE.Scene, sunDir: { value: THREE.Vector3 }): TileLayer {
   const limits = budget();
   const maxZoom = limits.tileZoom;
   const group = new THREE.Group();
@@ -72,7 +100,16 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
       ((90 - north) * Math.PI) / 180,
       ((north - south) * Math.PI) / 180,
     );
-    return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }));
+    return new THREE.Mesh(
+      geometry,
+      new THREE.ShaderMaterial({
+        uniforms: { map: { value: null }, sunDir, fade: { value: 0 }, ready: { value: 0 } },
+        vertexShader: TILE_VERT,
+        fragmentShader: TILE_FRAG,
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
   }
 
   function request(x: number, y: number, z: number): void {
@@ -83,8 +120,10 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
       return;
     }
     const mesh = patch(x, y, z);
-    const material = mesh.material as THREE.MeshBasicMaterial;
-    const tile: Tile = { mesh, material, used: performance.now(), ready: false };
+    const material = mesh.material as THREE.ShaderMaterial;
+    // finer tiles draw last, so they win wherever they overlap a coarser one
+    mesh.renderOrder = 1 + z;
+    const tile: Tile = { mesh, material, used: performance.now(), ready: false, zoom: z };
     tiles.set(key, tile);
     group.add(mesh);
     const url = URL_TEMPLATE.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
@@ -95,11 +134,13 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
           texture.dispose();
           return;
         }
-        texture.colorSpace = THREE.SRGBColorSpace;
+        // the base maps arrive compressed and are sampled raw, so the imagery is
+        // left alone too — otherwise the tiles come out far darker than the map
+        texture.colorSpace = THREE.LinearSRGBColorSpace;
         texture.minFilter = THREE.LinearFilter;
         texture.generateMipmaps = false;
-        material.map = texture;
-        material.needsUpdate = true;
+        material.uniforms.map.value = texture;
+        material.uniforms.ready.value = 1;
         tile.ready = true;
       },
       undefined,
@@ -115,7 +156,7 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
     if (!tile) return;
     group.remove(tile.mesh);
     tile.mesh.geometry.dispose();
-    tile.material.map?.dispose();
+    (tile.material.uniforms.map.value as THREE.Texture | null)?.dispose();
     tile.material.dispose();
     tiles.delete(key);
   }
@@ -132,12 +173,12 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
   return {
     update(centre, distance) {
       if (disposed || !navigator.onLine) return;
-      // nothing to do until the camera has actually gone somewhere
-      if (centre.distanceTo(lastCentre) < 0.02 && tiles.size > 0 && lastZoom) return;
-      lastCentre.copy(centre);
       // the closer the camera, the finer the tiles
       const altitude = Math.max(0.02, distance - 1);
       const zoom = Math.round(THREE.MathUtils.clamp(Math.log2(1.4 / altitude) + 5.2, 3, maxZoom));
+      // nothing to do until the camera has gone somewhere or changed its height
+      if (centre.distanceTo(lastCentre) < 0.02 && tiles.size > 0 && zoom === lastZoom) return;
+      lastCentre.copy(centre);
       const lat = 90 - (Math.acos(THREE.MathUtils.clamp(centre.clone().normalize().y, -1, 1)) * 180) / Math.PI;
       const lon = (Math.atan2(centre.z, -centre.x) * 180) / Math.PI - 180;
       lastZoom = zoom;
@@ -152,17 +193,17 @@ export function createTileLayer(scene: THREE.Scene): TileLayer {
           if (y < 0 || y >= size) continue;
           request(x, y, zoom);
         }
+      // once the finer set has arrived, the coarser one underneath can go
+      const current = [...tiles.values()].filter((t) => t.zoom === zoom);
+      if (current.length > 0 && current.every((t) => t.ready))
+        for (const [key, tile] of [...tiles.entries()]) if (tile.zoom !== zoom) drop(key);
       trim();
     },
     fade(dt) {
       for (const tile of tiles.values()) {
-        if (!tile.ready || tile.material.opacity >= 1) continue;
-        tile.material.opacity = Math.min(1, tile.material.opacity + dt * 2.5);
-        // once it is fully there, an opaque material is cheaper to draw
-        if (tile.material.opacity >= 1) {
-          tile.material.transparent = false;
-          tile.material.needsUpdate = true;
-        }
+        const fade = tile.material.uniforms.fade;
+        if (!tile.ready || fade.value >= 1) continue;
+        fade.value = Math.min(1, fade.value + dt * 2.5);
       }
     },
     count: () => tiles.size,

@@ -84,6 +84,7 @@ const EARTH_FRAG = `
   uniform float cloudShift;
   uniform float cloudAmount;
   uniform float cloudVisible;
+  uniform float cloudNear;
   uniform float specAmount;
   uniform float topoAmount;
   uniform float normalAmount;
@@ -133,7 +134,7 @@ const EARTH_FRAG = `
 
     // cloud layer, with a soft shadow just behind it
     vec2 cloudUv = vec2(vUv.x + cloudShift, vUv.y);
-    float cloud = texture2D(cloudMap, cloudUv).g * cloudAmount;
+    float cloud = texture2D(cloudMap, cloudUv).g * cloudAmount * cloudNear;
     // the shadow is the cloud that stands between this ground and the sun, so it
     // falls away from the light and stretches out as the sun gets low
     // ground distance to walk towards the sun, in degrees; longitudes crowd
@@ -141,7 +142,7 @@ const EARTH_FRAG = `
     float cosLat = max(0.2, length(vec2(normal.x, normal.z)));
     float reach = 2.2 / max(0.25, abs(lit));
     vec2 throwUv = vec2(dot(sun, east) * reach / (360.0 * cosLat), dot(sun, north) * reach / 180.0);
-    float shadow = texture2D(cloudMap, cloudUv + clamp(throwUv, -0.03, 0.03)).g * cloudAmount;
+    float shadow = texture2D(cloudMap, cloudUv + clamp(throwUv, -0.03, 0.03)).g * cloudAmount * cloudNear;
     col *= 1.0 - shadow * 0.3 * dayAmount;
     col = mix(col, mix(vec3(0.08, 0.09, 0.12), vec3(1.0), dayAmount), cloud * 0.55 * cloudVisible * (0.35 + dayAmount));
 
@@ -319,6 +320,7 @@ export async function createGlobe(
 
   const sunDir = { value: sunDirection(clock()) };
   const cloudShift = { value: 0 };
+  const cloudNear = { value: 1 };
 
   // satellite imagery on top of the base map, when there is a network
   let tileLayer: TileLayer | null = null;
@@ -337,6 +339,7 @@ export async function createGlobe(
         cloudShift,
         cloudAmount: { value: limits.clouds ? 1 : 0 },
         cloudVisible: { value: 1 },
+        cloudNear,
         specAmount: { value: limits.water ? 1 : 0 },
         topoAmount: { value: limits.topo && !limits.normals ? 1 : 0 },
         normalAmount: { value: limits.normals ? 1 : 0 },
@@ -740,6 +743,9 @@ export async function createGlobe(
       cutStart = now;
     }
     cloudShift.value = (cloudShift.value + 0.000006) % 1;
+    // the cloud map is two thousand pixels wide: lovely from orbit, a smear from
+    // the cruising altitude of an aircraft, so it thins out as the camera drops
+    cloudNear.value = Math.max(0, Math.min(1, (camera.position.length() - 1.02) / 0.22));
     starTime.value = now / 1000;
     if (showPlane) placePlane();
 
@@ -837,7 +843,7 @@ export async function createGlobe(
     { threshold: 0.01 },
   );
   seen.observe(host);
-  if (showPlane && navigator.onLine) tileLayer = createTileLayer(scene);
+  if (showPlane && navigator.onLine) tileLayer = createTileLayer(scene, sunDir);
   resize();
   if (route) buildRoute(route);
   resize();
@@ -877,7 +883,7 @@ export async function createGlobe(
         if (!on) {
           tileLayer?.dispose();
           tileLayer = null;
-        } else if (!tileLayer && showPlane) tileLayer = createTileLayer(scene);
+        } else if (!tileLayer && showPlane) tileLayer = createTileLayer(scene, sunDir);
       },
       scale: () => governor.scale,
       /** pin the render scale, for screenshots on software rasterisers */
