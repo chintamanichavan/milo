@@ -221,6 +221,21 @@ const STAR_FRAG = `
     gl_FragColor = vec4(vec3(1.0), vAlpha * (1.0 - d * 1.4));
   }`;
 
+/** a soft round blot, for the aircraft's shadow */
+function softDisc(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.75)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function labelSprite(text: string, colour: string): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -467,10 +482,19 @@ export async function createGlobe(
   plane.visible = showPlane;
   scene.add(plane);
 
+  // the aircraft's shadow on the ground: it sits above the streamed imagery, or
+  // it would be buried under it
   const blob = new THREE.Mesh(
-    new THREE.CircleGeometry(1, 20),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 }),
+    new THREE.CircleGeometry(1, 28),
+    new THREE.MeshBasicMaterial({
+      map: softDisc(),
+      color: 0x05070b,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+    }),
   );
+  blob.renderOrder = 12;
   blob.visible = false;
   scene.add(blob);
   let model: Plane3D = buildAircraft(aircraftId);
@@ -674,8 +698,8 @@ export async function createGlobe(
       const dir = centre
         .clone()
         .normalize()
-        .multiplyScalar(1.15)
-        .add(tangent.clone().multiplyScalar(-0.5))
+        .multiplyScalar(0.8)
+        .add(tangent.clone().multiplyScalar(-0.85))
         .add(lit.clone().multiplyScalar(0.25))
         .normalize();
       desired.copy(centre.clone().normalize().multiplyScalar(centre.length())).add(dir.multiplyScalar(back));
@@ -756,13 +780,28 @@ export async function createGlobe(
     const scale = THREE.MathUtils.clamp(toCamera * 0.024, 0.006, 0.08);
     plane.scale.setScalar(scale);
 
-    // the shadow only makes sense near the ground
+    // the shadow follows the aircraft at any height, thrown a little away from
+    // the sun, which is what tells you how high the thing is flying
     const low = phaseName === 'taxi' || phaseName === 'takeoff' || phaseName === 'landing';
-    blob.visible = showPlane && low;
+    blob.visible = showPlane;
     if (blob.visible) {
-      blob.position.copy(here.clone().normalize().multiplyScalar(1.0008));
+      const up = here.clone().normalize();
+      const sun = sunDir.value.clone().normalize();
+      const sideways = sun.clone().sub(up.clone().multiplyScalar(sun.dot(up)));
+      if (sideways.lengthSq() > 1e-6) sideways.normalize();
+      // the higher it flies, the further the shadow runs from the aircraft
+      blob.position
+        .copy(up)
+        .multiplyScalar(1.0035)
+        .add(sideways.multiplyScalar(-scale * (low ? 0.6 : 2.2)));
       blob.lookAt(0, 0, 0);
-      blob.scale.setScalar(scale * 2.4);
+      // an ellipse lying along the heading, not a circle
+      blob.updateMatrixWorld();
+      const right = new THREE.Vector3().setFromMatrixColumn(blob.matrixWorld, 0).normalize();
+      const upward = new THREE.Vector3().setFromMatrixColumn(blob.matrixWorld, 1).normalize();
+      blob.rotateZ(Math.atan2(heading.dot(upward), heading.dot(right)));
+      blob.scale.set(scale * (low ? 2.6 : 2.0), scale * (low ? 1.5 : 1.1), 1);
+      (blob.material as THREE.MeshBasicMaterial).opacity = low ? 0.36 : 0.24;
     }
     const drawn = Math.max(6, Math.floor(progress * SEGMENTS) * 8 * 6);
     flown.geometry.setDrawRange(0, drawn);
@@ -818,7 +857,15 @@ export async function createGlobe(
     seaTime.value = now / 1000;
     // the cloud map is two thousand pixels wide: lovely from orbit, a smear from
     // the cruising altitude of an aircraft, so it thins out as the camera drops
-    cloudNear.value = Math.max(0, Math.min(1, (camera.position.length() - 1.1) / 0.4));
+    // and never takes the whole frame while a route is on screen
+    const height = camera.position.length();
+    const cloudy =
+      height <= 1.08
+        ? 0
+        : height <= 1.6
+          ? 0.25 * ((height - 1.08) / 0.52)
+          : 0.25 + 0.75 * Math.min(1, (height - 1.6) / 1.4);
+    cloudNear.value = showPlane ? Math.min(0.6, cloudy) : cloudy;
     // ripples are only worth drawing from close in; far out they would just crawl
     waveAmount.value =
       limits.water && fx.waves
@@ -980,7 +1027,7 @@ export async function createGlobe(
       sunDirection: () => sunDirection(clock()).toArray(),
       fps: () => governor.fps(),
       tiles: () => tileLayer?.count() ?? 0,
-      seams: () => tileLayer?.seams() ?? { zoom: 0, edges: [], centres: [], rim: [] },
+      seams: () => tileLayer?.seams() ?? { zoom: 0, edges: [], centres: [] },
       setTiles: (on: boolean) => {
         if (!on) {
           tileLayer?.dispose();
