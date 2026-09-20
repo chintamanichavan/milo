@@ -24,6 +24,8 @@ export const BUDGETS: Record<Tier, Budget> = {
 };
 
 const KEY = 'c25k.tier';
+const FX_KEY = 'c25k.effects';
+const BENCH_KEY = 'c25k.effects.bench';
 
 const guess = (): Tier => {
   const nav = navigator as Navigator & { deviceMemory?: number; hardwareConcurrency?: number };
@@ -46,6 +48,44 @@ export function tier(): Tier {
 export const setTier = (next: Tier): void => localStorage.setItem(KEY, next);
 
 export const budget = (): Budget => BUDGETS[tier()];
+
+/** the extras: lovely, costly, and only on the top tier */
+export interface Effects {
+  /** ripples that break up the sun's glint on the sea */
+  waves: boolean;
+  /** the bright side of the terminator bleeds a little light, through a post chain */
+  bloom: boolean;
+  /** subpixel edge smoothing, since the post chain loses the hardware kind */
+  smaa: boolean;
+  /** the sun throws ghosts across the lens */
+  flare: boolean;
+}
+
+const phone = (): boolean => Math.min(window.innerWidth, window.innerHeight) < 700;
+
+/** a phone earns the extras by holding a full frame rate at full resolution once */
+export const benchmarked = (): boolean => localStorage.getItem(BENCH_KEY) === 'pass';
+
+export function markBenchmark(fps: number, scale: number): void {
+  if (localStorage.getItem(BENCH_KEY)) return;
+  localStorage.setItem(BENCH_KEY, fps >= 55 && scale >= 1 ? 'pass' : 'fail');
+}
+
+export function effects(): Effects {
+  const on = tier() === 'high' && (!phone() || benchmarked());
+  // waves and the flare are free; the post chain is not, so it waits to be asked
+  const base: Effects = { waves: on, bloom: false, smaa: false, flare: on };
+  try {
+    return { ...base, ...(JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as Partial<Effects>) };
+  } catch {
+    return base;
+  }
+}
+
+export function setEffect(name: keyof Effects, on: boolean): void {
+  const saved = JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as Partial<Effects>;
+  localStorage.setItem(FX_KEY, JSON.stringify({ ...saved, [name]: on }));
+}
 
 /**
  * Watches frame times and steps the renderer down a notch when it cannot keep up.

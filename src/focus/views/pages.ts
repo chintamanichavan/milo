@@ -4,7 +4,7 @@ import { toast } from '../../ui/toast';
 import { BADGES } from '../achievements';
 import { AIRPORTS, airport, distanceKm, KM_TO_MI, type Continent } from '../airports';
 import { rankFor, nextRank, wings } from '../flightkit';
-import { setTier, tier } from '../quality';
+import { effects, setEffect, setTier, tier, type Effects } from '../quality';
 import { planeSilhouette } from '../aircraft3d';
 import { FLEET, nextUnlock, unlocked } from '../planes';
 import { createSky, type Sky } from '../sky';
@@ -309,6 +309,7 @@ export function statsView(root: HTMLElement): () => void {
 export function focusSettingsView(root: HTMLElement): () => void {
   const state = loadFocus();
   const s = state.settings;
+  const fx = effects();
   const labelRows = state.labels
     .map(
       (l, i) => `<div class="label-row" data-label="${i}">
@@ -365,6 +366,23 @@ export function focusSettingsView(root: HTMLElement): () => void {
       </div>
       <p class="line sub">Picked from your device the first time. High draws more of the
         planet — more detail, more stars, thicker air. Low keeps the frame rate on older phones.</p>
+      ${
+        tier() === 'high'
+          ? `<div id="fxRows">${(
+              [
+                ['waves', 'Sea sparkle — waves break up the sun on the water'],
+                ['flare', 'Lens flare — the sun throws ghosts across the frame'],
+                ['bloom', 'Bloom — bright edges bleed light. Costs frames.'],
+                ['smaa', 'Smoother edges — only worth it with bloom on. Costs frames.'],
+              ] as [keyof Effects, string][]
+            )
+              .map(
+                ([key, label]) =>
+                  `<label class="sw tap"><input type="checkbox" data-fx="${key}" ${fx[key] ? 'checked' : ''}><span>${label}</span></label>`,
+              )
+              .join('')}</div>`
+          : ''
+      }
     </div>
     <div class="panel">
       <p class="tag">Destinations</p>
@@ -388,6 +406,12 @@ export function focusSettingsView(root: HTMLElement): () => void {
     if (!chip) return;
     setFocusSettings({ breakMin: Number(chip.dataset.break) });
     focusSettingsView(root);
+  });
+  root.querySelector('#fxRows')?.addEventListener('change', (ev) => {
+    const box = ev.target as HTMLInputElement;
+    if (!box.dataset.fx) return;
+    setEffect(box.dataset.fx as keyof Effects, box.checked);
+    toast('Takes effect on your next flight');
   });
   root.querySelector('#tierChips')!.addEventListener('click', (ev) => {
     const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-tier]');

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { budget, Governor } from './quality';
+import { buildFlare } from './flare';
+import { budget, effects, Governor, markBenchmark } from './quality';
 import { createTileLayer, type TileLayer } from './tiles';
 import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
@@ -86,6 +87,8 @@ const EARTH_FRAG = `
   uniform float cloudVisible;
   uniform float cloudNear;
   uniform float specAmount;
+  uniform float waveAmount;
+  uniform float seaTime;
   uniform float topoAmount;
   uniform float normalAmount;
   uniform float nightGain;
@@ -115,10 +118,20 @@ const EARTH_FRAG = `
     vec3 day = texture2D(dayMap, vUv).rgb * relief;
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 1.12);
 
-    // water catches the sun
+    // water catches the sun, and micro-waves break the glint into glitter
     float water = texture2D(waterMap, vUv).r;
     vec3 halfVec = normalize(sun + normalize(vViewDir));
-    float spec = pow(max(dot(normal, halfVec), 0.0), 90.0) * water * 0.55 * specAmount;
+    vec2 ripple = vec2(
+      sin(vUv.x * 1900.0 + seaTime * 1.9) * sin(vUv.y * 1100.0 - seaTime * 1.3)
+        + 0.5 * sin(vUv.x * 4300.0 - seaTime * 2.7),
+      sin(vUv.y * 1700.0 + seaTime * 1.5) * sin(vUv.x * 900.0 + seaTime * 2.1)
+        + 0.5 * sin(vUv.y * 3700.0 + seaTime * 3.1)
+    ) * 0.02 * waveAmount;
+    vec3 sea = normalize(normal + east * ripple.x + north * ripple.y);
+    float gloss = pow(max(dot(sea, halfVec), 0.0), 90.0);
+    float sheen = pow(max(dot(normal, halfVec), 0.0), 26.0) * 0.25;
+    float spec = (mix(pow(max(dot(normal, halfVec), 0.0), 90.0), gloss, waveAmount) + sheen * waveAmount)
+      * water * 0.55 * specAmount;
 
     // city lights: warm, a little bloomed, never grey
     vec3 lights = texture2D(nightMap, vUv).rgb;
@@ -266,6 +279,7 @@ export async function createGlobe(
   camera.position.set(0, 0.4, 3.2);
 
   const limits = budget();
+  const fx = effects();
   const anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   sharedKtx2 ??= new KTX2Loader().setTranscoderPath('/basis/');
   const ktx2 = sharedKtx2.detectSupport(renderer);
@@ -320,6 +334,8 @@ export async function createGlobe(
 
   const sunDir = { value: sunDirection(clock()) };
   const cloudShift = { value: 0 };
+  const seaTime = { value: 0 };
+  const waveAmount = { value: 0 };
   const cloudNear = { value: 1 };
 
   // satellite imagery on top of the base map, when there is a network
@@ -341,6 +357,8 @@ export async function createGlobe(
         cloudVisible: { value: 1 },
         cloudNear,
         specAmount: { value: limits.water ? 1 : 0 },
+        waveAmount,
+        seaTime,
         topoAmount: { value: limits.topo && !limits.normals ? 1 : 0 },
         normalAmount: { value: limits.normals ? 1 : 0 },
         nightGain: { value: limits.nightGain },
@@ -420,6 +438,35 @@ export async function createGlobe(
 
   // the sun is the key light; the earth below is a soft fill
   const sunLight = new THREE.DirectionalLight(0xfff3e0, 3.4);
+  // bloom and edge smoothing ride a post chain, which is a separate download
+  let gone = false;
+  let composer: { render(): void; setSize(w: number, h: number): void; setPixelRatio(r: number): void } | null = null;
+  if (limits.atmosphere && (fx.bloom || fx.smaa)) {
+    void (async () => {
+      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { SMAAPass }, { OutputPass }] =
+        await Promise.all([
+          import('three/examples/jsm/postprocessing/EffectComposer.js'),
+          import('three/examples/jsm/postprocessing/RenderPass.js'),
+          import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+          import('three/examples/jsm/postprocessing/SMAAPass.js'),
+          import('three/examples/jsm/postprocessing/OutputPass.js'),
+        ]);
+      if (gone) return;
+      const made = new EffectComposer(renderer);
+      made.addPass(new RenderPass(scene, camera));
+      // only the bright side of the terminator and the city lights should bleed
+      if (fx.bloom) made.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.55, 0.82));
+      if (fx.smaa) made.addPass(new SMAAPass());
+      made.addPass(new OutputPass());
+      composer = made;
+      resize();
+    })();
+  }
+
+  // the sun through the lens, on the tiers that can afford it
+  const flare = fx.flare && limits.atmosphere ? buildFlare() : null;
+  if (flare) scene.add(flare.group);
+
   scene.add(sunLight);
   const fill = new THREE.HemisphereLight(0x8aa3c8, 0x2a2f38, 0.9);
   scene.add(fill);
@@ -723,6 +770,7 @@ export async function createGlobe(
     renderer.setSize(Math.max(1, rect.width * scale), Math.max(1, rect.height * scale), false);
     renderer.domElement.style.width = `${Math.round(rect.width)}px`;
     renderer.domElement.style.height = `${Math.round(rect.height)}px`;
+    composer?.setSize(Math.max(1, rect.width * scale), Math.max(1, rect.height * scale));
   });
 
   function render(now = performance.now()): void {
@@ -743,10 +791,17 @@ export async function createGlobe(
       cutStart = now;
     }
     cloudShift.value = (cloudShift.value + 0.000006) % 1;
+    seaTime.value = now / 1000;
     // the cloud map is two thousand pixels wide: lovely from orbit, a smear from
     // the cruising altitude of an aircraft, so it thins out as the camera drops
     cloudNear.value = Math.max(0, Math.min(1, (camera.position.length() - 1.02) / 0.22));
+    // ripples are only worth drawing from close in; far out they would just crawl
+    waveAmount.value =
+      limits.water && fx.waves
+        ? Math.max(0, Math.min(1, (2.6 - camera.position.length()) / 0.8))
+        : 0;
     starTime.value = now / 1000;
+    if (flare) flare.update(camera, sunDir.value);
     if (showPlane) placePlane();
 
     // stream sharper imagery around whatever the camera is looking at
@@ -762,7 +817,7 @@ export async function createGlobe(
     const introT = flyIn ? Math.min(1, (now - introStart) / INTRO_MS) : 1;
     if (frozen) {
       // the ground-truth tests park the camera; the controls must not re-aim it
-      renderer.render(scene, camera);
+      draw();
       return;
     }
     if (introT < 1) {
@@ -805,7 +860,12 @@ export async function createGlobe(
     // OrbitControls aims the camera itself, so it has to share our target
     if (controls) controls.target.copy(desiredTarget);
     controls?.update();
-    renderer.render(scene, camera);
+    draw();
+  }
+
+  function draw(): void {
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
   }
 
   function loop(now: number): void {
@@ -816,6 +876,8 @@ export async function createGlobe(
     last = now;
     if (!onScreen) return;
     governor.frame(now);
+    // after ten seconds of honest work, decide whether this device can afford the extras
+    if (now > 10_000 && governor.fps() > 0) markBenchmark(governor.fps(), governor.scale);
     render(now);
   }
 
@@ -823,9 +885,11 @@ export async function createGlobe(
     const rect = host.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    renderer.setSize(w, h, false);
+    renderer.setSize(Math.max(1, w * governor.scale), Math.max(1, h * governor.scale), false);
     renderer.domElement.style.width = `${w}px`;
     renderer.domElement.style.height = `${h}px`;
+    composer?.setPixelRatio(renderer.getPixelRatio());
+    composer?.setSize(Math.max(1, w * governor.scale), Math.max(1, h * governor.scale));
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     if (route) frameRoute();
@@ -893,6 +957,7 @@ export async function createGlobe(
         renderer.setSize(Math.max(1, rect.width * value), Math.max(1, rect.height * value), false);
         renderer.domElement.style.width = `${Math.round(rect.width)}px`;
         renderer.domElement.style.height = `${Math.round(rect.height)}px`;
+        composer?.setSize(Math.max(1, rect.width * value), Math.max(1, rect.height * value));
         render();
       },
       projectVec: (x: number, y: number, z: number) => {
@@ -995,10 +1060,12 @@ export async function createGlobe(
     },
     dispose() {
       running = false;
+      gone = true;
       cancelAnimationFrame(raf);
       observer.disconnect();
       seen.disconnect();
       tileLayer?.dispose();
+      flare?.dispose();
       controls?.dispose();
       renderer.dispose();
       renderer.domElement.remove();
