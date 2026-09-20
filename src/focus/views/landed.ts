@@ -1,7 +1,7 @@
 import { miloMark } from '../../badge';
 import { now, whenAdvanced } from '../../clock';
 import { toast } from '../../ui/toast';
-import { clock } from '../../weeks';
+import { clock } from '../../ui/time';
 import { checkBadges } from '../achievements';
 import { airport } from '../airports';
 import { planeGlyph } from '../planes';

@@ -1,12 +1,12 @@
 :root {
-  /* type scale */
-  --t12: 12px;
-  --t14: 14px;
-  --t17: 17px;
-  --t22: 22px;
-  --t34: 34px;
-  --t56: 56px;
-  --t88: 88px;
+  /* type scale, in rem so the phone's own text-size setting still works */
+  --t12: 0.75rem;
+  --t14: 0.875rem;
+  --t17: 1.0625rem;
+  --t22: 1.375rem;
+  --t34: 2.125rem;
+  --t56: 3.5rem;
+  --t88: 5.5rem;
   /* the three sizes that grow with the viewport */
   --title: var(--t34);
   --word: var(--t56);
@@ -1644,6 +1644,142 @@ button.card {
 .hist .tag {
   display: flex;
   justify-content: space-between;
+}
+
+/* a manual theme beats the system one */
+html[data-theme='dark'] {
+  --bg: #0b0d0f;
+  --panel: #14181b;
+  --line: #222a2f;
+  --text: #e9eef1;
+  --muted: #7d888f;
+  --run: #c5f74f;
+  --walk: #5eead4;
+  --run-dim: #313f16;
+  --walk-dim: #123b37;
+  --run-wash: rgba(197, 247, 79, 0.06);
+  --walk-wash: rgba(94, 234, 212, 0.06);
+  --glow: rgba(197, 247, 79, 0.35);
+  --violet: #a78bfa;
+  --violet-glow: rgba(167, 139, 250, 0.35);
+  --ink: #0b0d0f;
+  color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  --bg: #f5f5f3;
+  --panel: #fffffe;
+  --line: #dedcd6;
+  --text: #16181a;
+  --muted: #5c6268;
+  --run: #4f7a00;
+  --walk: #0b7566;
+  --run-dim: #e4ecd0;
+  --walk-dim: #d2eae6;
+  --run-wash: rgba(79, 122, 0, 0.06);
+  --walk-wash: rgba(11, 117, 102, 0.06);
+  --glow: rgba(79, 122, 0, 0.3);
+  --violet: #6d4ee0;
+  --violet-glow: rgba(109, 78, 224, 0.3);
+  --ink: #ffffff;
+  color-scheme: light;
+}
+
+/* effort colouring for the 5K+ plans */
+.blk.easy {
+  opacity: 0.55;
+}
+
+.blk.hard {
+  filter: brightness(1.25) saturate(1.3);
+}
+
+[data-effort='hard'] .kind::after {
+  content: ' · hard';
+  font-size: var(--t14);
+  letter-spacing: 0.1em;
+}
+
+[data-effort='easy'] .kind::after {
+  content: ' · easy';
+  font-size: var(--t14);
+  letter-spacing: 0.1em;
+}
+
+.tipcard {
+  display: grid;
+  gap: calc(var(--u) * 0.5);
+  margin-top: calc(var(--u) * 2);
+  padding: calc(var(--u) * 2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tipcard b {
+  font: 500 var(--t17) / 1.3 var(--sans);
+}
+
+.moves {
+  display: grid;
+  gap: var(--u);
+  padding: 0;
+  list-style: none;
+}
+
+.moves li {
+  display: grid;
+  gap: 2px;
+}
+
+.moves b {
+  font: 500 var(--t14) / 1.4 var(--sans);
+}
+
+.moves span {
+  color: var(--muted);
+  font-size: var(--t14);
+  line-height: 1.5;
+}
+
+.route-map,
+.route-wrap {
+  color: var(--run);
+}
+
+.feel {
+  display: grid;
+  gap: var(--u);
+  width: 100%;
+  max-width: 340px;
+}
+
+.feel .chips {
+  margin-bottom: 0;
+}
+
+.chip.on {
+  border-color: var(--run);
+  background: var(--run);
+  color: var(--ink);
+}
+
+.certificate {
+  margin: calc(var(--u) * 2) 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.card.plan {
+  justify-items: start;
+  text-align: left;
+}
+
+.tip .line {
+  margin-bottom: var(--u);
+  font-size: var(--t14);
 }
 
 /* ---------- wide: iPad and laptop ---------- */

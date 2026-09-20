@@ -1,7 +1,11 @@
-import { beep, say, stopSpeech } from '../audio';
-import { now, whenAdvanced } from '../clock';
-import { claimHint, recordRun } from '../store';
-import { clock, planFor, shortDuration, spellDuration, type Plan } from '../weeks';
+import { beep, metronome, say, stopMetronome, stopSpeech } from '../../audio';
+import { now, whenAdvanced } from '../../clock';
+import { clock, shortDuration } from '../../ui/time';
+import { cueLine, personaById } from '../coach';
+import { distanceLabel, paceLabel, Tracker } from '../gps';
+import { planOf } from '../plans';
+import { claimHint, load, recordRun, type CompletedRun } from '../store';
+import type { Plan } from '../weeks';
 import { setResult } from './done';
 
 const COUNT_IN_MS = 3600;
@@ -23,34 +27,43 @@ function locate(plan: Plan, elapsed: number): Spot {
   return { index: plan.segments.length, start, remaining: 0 };
 }
 
-function cueFor(plan: Plan, index: number, lastRunIndex: number): string {
-  const seg = plan.segments[index];
-  if (index === 0) return 'Warm up. Walk for five minutes.';
-  if (index === plan.segments.length - 1) return 'Cool down. Walk it out for five minutes.';
-  if (seg.kind === 'walk') return `Walk for ${spellDuration(seg.sec)}.`;
-  if (index === lastRunIndex)
-    return `Last one. Run for ${spellDuration(seg.sec)}. You've got this.`;
-  return `Run for ${spellDuration(seg.sec)}.`;
-}
-
 const replay = (el: HTMLElement, cls: string): void => {
   el.classList.remove(cls);
   void el.offsetWidth;
   el.classList.add(cls);
 };
 
-export function runView(root: HTMLElement, week: number, run: number): () => void {
-  const plan = planFor(week, run);
+export function runView(
+  root: HTMLElement,
+  week: number,
+  run: number,
+  programme = 'c25k',
+): () => void {
+  const state = load();
+  const settings = state.settings;
+  const persona = personaById(settings.coach);
+  const plan = planOf(programme, week, run);
   const segs = plan.segments;
   const lastRunIndex = segs.reduce((best, s, i) => (s.kind === 'run' ? i : best), 0);
   const showHint = claimHint();
+  const tracking = settings.gps && !settings.treadmill;
+  const tracker = tracking ? new Tracker() : null;
+
+  const cueFor = (index: number): string => {
+    const seg = segs[index];
+    if (index === 0) return cueLine(persona, 'takeoff');
+    if (index === segs.length - 1) return cueLine(persona, 'cool');
+    if (seg.kind === 'walk') return cueLine(persona, 'walk', seg.sec);
+    if (index === lastRunIndex) return cueLine(persona, 'last', seg.sec);
+    return cueLine(persona, 'run', seg.sec);
+  };
 
   root.innerHTML = `
     <section class="run" id="stage" data-kind="walk" data-phase="count"
       tabindex="0" role="button" aria-label="Hold anywhere to pause">
       <div class="wash"></div>
       <header class="run-head">
-        <span class="tag">Week ${week} · Run ${run}</span>
+        <span class="tag">${programme === 'c25k' ? `Week ${week} · Run ${run}` : `${programme} · W${week}R${run}`}</span>
         <button class="link tap" id="end">End early</button>
       </header>
       <div class="stage-mid">
@@ -60,12 +73,19 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
       </div>
       <footer class="run-foot">
         <div class="track">
-          <div class="track-row">${segs.map((s) => `<i class="blk ${s.kind}" style="flex-grow:${s.sec}"></i>`).join('')}</div>
-          <div class="track-row track-lit" id="rowLit">${segs.map((s) => `<i class="blk ${s.kind}" style="flex-grow:${s.sec}"></i>`).join('')}</div>
+          <div class="track-row">${segs
+            .map((s) => `<i class="blk ${s.kind}${s.effort ? ` ${s.effort}` : ''}" style="flex-grow:${s.sec}"></i>`)
+            .join('')}</div>
+          <div class="track-row track-lit" id="rowLit">${segs
+            .map((s) => `<i class="blk ${s.kind}${s.effort ? ` ${s.effort}` : ''}" style="flex-grow:${s.sec}"></i>`)
+            .join('')}</div>
           <i class="marker" id="marker"></i>
           <i class="shimmer" id="shimmer"></i>
         </div>
-        <div class="meta"><span id="elapsed">0:00</span><span>${clock(plan.totalSec)} total</span></div>
+        <div class="meta">
+          <span id="elapsed">0:00</span>
+          <span id="dist">${tracking ? 'finding you…' : `${clock(plan.totalSec)} total`}</span>
+        </div>
         <p class="hint" id="hint">${showHint ? 'hold anywhere to pause' : ''}</p>
       </footer>
       <div class="countin" id="countin"><b id="digit">3</b></div>
@@ -80,6 +100,7 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
   const markerEl = root.querySelector<HTMLElement>('#marker')!;
   const shimmerEl = root.querySelector<HTMLElement>('#shimmer')!;
   const elapsedEl = root.querySelector<HTMLElement>('#elapsed')!;
+  const distEl = root.querySelector<HTMLElement>('#dist')!;
   const hintEl = root.querySelector<HTMLElement>('#hint')!;
   const digitEl = root.querySelector<HTMLElement>('#digit')!;
   const liveEl = root.querySelector<HTMLElement>('#live')!;
@@ -94,8 +115,19 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
   let ticked = -1;
   let halfwaySaid = false;
   let finished = false;
+  let lastPaint = 0;
 
   const elapsed = (): number => ((pausedAt ?? now()) - startedAt - pausedFor) / 1000;
+
+  if (tracker && !tracker.start(() => paintDistance())) distEl.textContent = 'no location';
+
+  function paintDistance(): void {
+    if (!tracker) return;
+    distEl.textContent = `${distanceLabel(tracker.distanceKm, settings.units)} · ${paceLabel(
+      tracker.lastSpeedKmh > 0.5 ? 3600 / tracker.lastSpeedKmh : 0,
+      settings.units,
+    )}`;
+  }
 
   function countIn(): void {
     const left = startedAt - now();
@@ -106,9 +138,11 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
       replay(digitEl, 'beat');
       if (want === 'GO') {
         beep('go');
-        say(cueFor(plan, 0, lastRunIndex));
-        liveEl.textContent = cueFor(plan, 0, lastRunIndex);
+        const line = cueFor(0);
+        say(line, persona);
+        liveEl.textContent = line;
         cued = 0;
+        if (segs[0].bpm && settings.metronome) metronome(segs[0].bpm);
       } else beep('tick');
     }
     if (left <= 0) {
@@ -122,16 +156,25 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
     if (counting) countIn();
 
     const e = Math.min(Math.max(elapsed(), 0), plan.totalSec);
+    if (tracker) {
+      tracker.tickSeconds(Math.max(0, e - lastPaint));
+      lastPaint = e;
+    }
     const spot = locate(plan, e);
     if (spot.index >= segs.length) return finish(plan.totalSec, false);
     const seg = segs[spot.index];
     const next = segs[spot.index + 1];
     const pct = (e / plan.totalSec) * 100;
 
+    // a segment measured in kilometres ends when the distance lands
+    if (seg.untilKm && tracker && tracker.runKm >= seg.untilKm) return finish(e, false);
+
     countEl.textContent = clock(spot.remaining);
     nextEl.textContent = next
       ? `next · ${next.kind} ${shortDuration(next.sec)}`
-      : 'next · the finish';
+      : seg.untilKm
+        ? `next · ${seg.untilKm} km in`
+        : 'next · the finish';
     elapsedEl.textContent = clock(e);
     litEl.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
     markerEl.style.left = `${pct}%`;
@@ -141,12 +184,16 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
       ticked = -1;
       kindEl.textContent = seg.kind === 'run' ? 'RUN' : 'WALK';
       stage.dataset.kind = seg.kind;
+      stage.dataset.effort = seg.effort ?? '';
       replay(kindEl, 'swap');
       replay(countEl, 'pulse');
       beep(seg.kind);
-      const line = cueFor(plan, spot.index, lastRunIndex);
-      say(line);
+      const line = cueFor(spot.index);
+      say(line, persona);
       liveEl.textContent = line;
+      tracker?.setKind(seg.kind, 0);
+      if (seg.bpm && settings.metronome) metronome(seg.bpm);
+      else stopMetronome();
     }
 
     const left = Math.ceil(spot.remaining);
@@ -158,7 +205,9 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
 
     if (!halfwaySaid && e >= plan.totalSec / 2) {
       halfwaySaid = true;
-      say('Halfway through. Nice and steady.');
+      const line = cueLine(persona, 'halfway');
+      say(line, persona);
+      liveEl.textContent = line;
       replay(shimmerEl, 'shine');
     }
   }
@@ -166,10 +215,22 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
   function finish(seconds: number, partial: boolean): void {
     if (finished) return;
     finished = true;
+    stopMetronome();
     beep('done');
-    say(partial ? 'Stopping here. Some is better than none.' : 'Done. Nice work.');
-    recordRun(week, run, seconds);
-    setResult({ week, run, durationSec: seconds, partial });
+    const line = partial ? 'Stopping here. Some is better than none.' : cueLine(persona, 'finish');
+    say(line, persona);
+    const extra: Partial<CompletedRun> = { prog: programme };
+    if (tracker) {
+      const summary = tracker.stop();
+      if (summary.distanceKm > 0.02) {
+        extra.distanceKm = Number(summary.distanceKm.toFixed(3));
+        extra.path = summary.path;
+        extra.runPace = Math.round(summary.runPace);
+        extra.walkPace = Math.round(summary.walkPace);
+      }
+    }
+    recordRun(week, run, seconds, extra);
+    setResult({ week, run, durationSec: seconds, partial, programme, ...extra });
     location.hash = '#/done';
   }
 
@@ -181,17 +242,19 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
       hintEl.textContent = 'tap to resume';
       liveEl.textContent = 'Paused';
       stopSpeech();
+      stopMetronome();
     } else {
       pausedFor += now() - (pausedAt ?? now());
       pausedAt = null;
       stage.classList.remove('paused');
       hintEl.textContent = '';
       liveEl.textContent = 'Running again';
+      const seg = segs[Math.max(0, cued)];
+      if (seg?.bpm && settings.metronome) metronome(seg.bpm);
     }
     paint();
   }
 
-  // Hold anywhere for 400ms to pause; a stray tap only wakes the screen.
   let holdTimer = 0;
   const holdStart = (ev: PointerEvent): void => {
     if ((ev.target as HTMLElement).closest('.tap')) return;
@@ -220,7 +283,6 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
     finish(Math.min(Math.max(elapsed(), 0), plan.totalSec), true);
   });
 
-  // Pocket mode: sit still for ten seconds and the screen all but vanishes.
   let dimAt = Date.now() + 10_000;
   const wake = (): void => {
     dimAt = Date.now() + 10_000;
@@ -260,5 +322,7 @@ export function runView(root: HTMLElement, week: number, run: number): () => voi
     document.body.classList.remove('dim');
     void lock?.release();
     stopSpeech();
+    stopMetronome();
+    tracker?.stop();
   };
 }

@@ -1,7 +1,7 @@
 import { beep, say, stopSpeech } from '../../audio';
 import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
-import { clock } from '../../weeks';
+import { clock } from '../../ui/time';
 import { planRoute } from '../airports';
 import { setAmbientVolume, startAmbientFromSettings, stopAmbient } from '../ambient';
 import {

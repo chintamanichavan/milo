@@ -1,6 +1,6 @@
 import { beep, say, unlockAudio } from '../../audio';
 import { now, whenAdvanced } from '../../clock';
-import { clock } from '../../weeks';
+import { clock } from '../../ui/time';
 import type { RoutineItem } from '../data';
 import { suggest, type SetLog } from '../progression';
 import {

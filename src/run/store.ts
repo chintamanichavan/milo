@@ -1,5 +1,5 @@
-import { FOCUS_KEY } from './focus/store';
-import { LIFT_KEY } from './lift/store';
+import { FOCUS_KEY } from '../focus/store';
+import { LIFT_KEY } from '../lift/store';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
 export interface CompletedRun {
@@ -7,17 +7,49 @@ export interface CompletedRun {
   run: number;
   date: string;
   durationSec: number;
+  /** which programme; missing means Couch to 5K */
+  prog?: string;
+  distanceKm?: number;
+  /** [lat, lon, secondsFromStart][] */
+  path?: [number, number, number][];
+  /** seconds per km while running and while walking */
+  runPace?: number;
+  walkPace?: number;
+  feel?: 'easy' | 'ok' | 'hard';
+  note?: string;
+  manual?: boolean;
+}
+
+export type Units = 'mi' | 'km';
+
+export interface Reminder {
+  days: number[];
+  time: string;
 }
 
 export interface Settings {
   voice: boolean;
   beep: boolean;
+  coach: string;
+  /** voiceURI per persona */
+  voices: Record<string, string>;
+  gps: boolean;
+  treadmill: boolean;
+  units: Units;
+  theme: 'auto' | 'dark' | 'light';
+  beepsOnly: boolean;
+  metronome: boolean;
+  reminder: Reminder;
+  graduateName?: string;
+  programme: string;
 }
 
 /** One-shot moments: a grid that fills in, a hint shown once. */
 export interface Flags {
   celebrate?: boolean;
   hintSeen?: boolean;
+  graduated?: boolean;
+  certificateSeen?: boolean;
 }
 
 export interface State {
@@ -28,9 +60,24 @@ export interface State {
 
 const KEY = 'c25k.v1';
 
+const defaults = (): Settings => ({
+  voice: true,
+  beep: true,
+  coach: 'steady',
+  voices: {},
+  gps: false,
+  treadmill: false,
+  units: 'mi',
+  theme: 'auto',
+  beepsOnly: false,
+  metronome: true,
+  reminder: { days: [0, 3, 5], time: '07:30' },
+  programme: 'c25k',
+});
+
 const blank = (): State => ({
   completedRuns: [],
-  settings: { voice: true, beep: true },
+  settings: defaults(),
   flags: {},
 });
 
@@ -41,7 +88,7 @@ export function load(): State {
     const parsed = JSON.parse(raw) as Partial<State>;
     return {
       completedRuns: Array.isArray(parsed.completedRuns) ? parsed.completedRuns : [],
-      settings: { ...blank().settings, ...(parsed.settings ?? {}) },
+      settings: { ...defaults(), ...(parsed.settings ?? {}) },
       flags: parsed.flags ?? {},
     };
   } catch {
@@ -53,13 +100,19 @@ export function save(state: State): void {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
-export function recordRun(week: number, run: number, durationSec: number): State {
+export function recordRun(
+  week: number,
+  run: number,
+  durationSec: number,
+  extra: Partial<CompletedRun> = {},
+): State {
   const state = load();
   state.completedRuns.push({
     week,
     run,
     date: new Date().toISOString(),
     durationSec: Math.round(durationSec),
+    ...extra,
   });
   state.flags.celebrate = true;
   save(state);
@@ -95,17 +148,45 @@ export function setSettings(patch: Partial<Settings>): Settings {
   return state.settings;
 }
 
+export const progOf = (run: CompletedRun): string => run.prog ?? 'c25k';
+
+export const runsIn = (state: State, prog = 'c25k'): CompletedRun[] =>
+  state.completedRuns.filter((r) => progOf(r) === prog);
+
 /** Where you are now: the run after the last one you finished. */
-export function nextUp(state: State): { week: number; run: number } | null {
-  const last = state.completedRuns[state.completedRuns.length - 1];
+export function nextUp(
+  state: State,
+  prog = 'c25k',
+  weeks = TOTAL_WEEKS,
+  perWeek = RUNS_PER_WEEK,
+): { week: number; run: number } | null {
+  const mine = runsIn(state, prog);
+  const last = mine[mine.length - 1];
   if (!last) return { week: 1, run: 1 };
-  if (last.run < RUNS_PER_WEEK) return { week: last.week, run: last.run + 1 };
-  if (last.week < TOTAL_WEEKS) return { week: last.week + 1, run: 1 };
+  if (last.run < perWeek) return { week: last.week, run: last.run + 1 };
+  if (last.week < weeks) return { week: last.week + 1, run: 1 };
   return null;
 }
 
-export function isDone(state: State, week: number, run: number): boolean {
-  return state.completedRuns.some((c) => c.week === week && c.run === run);
+export const graduated = (state: State): boolean =>
+  runsIn(state, 'c25k').some((r) => r.week === TOTAL_WEEKS && r.run === RUNS_PER_WEEK) ||
+  !!state.flags.graduated;
+
+export function updateRun(index: number, patch: Partial<CompletedRun>): void {
+  const state = load();
+  if (!state.completedRuns[index]) return;
+  state.completedRuns[index] = { ...state.completedRuns[index], ...patch };
+  save(state);
+}
+
+export function deleteRun(index: number): void {
+  const state = load();
+  state.completedRuns.splice(index, 1);
+  save(state);
+}
+
+export function isDone(state: State, week: number, run: number, prog = 'c25k'): boolean {
+  return runsIn(state, prog).some((c) => c.week === week && c.run === run);
 }
 
 export function weekDone(state: State, week: number): boolean {
@@ -148,7 +229,7 @@ export async function importFile(file: File): Promise<boolean> {
     if (!run || !Array.isArray(run.completedRuns)) return false;
     save({
       completedRuns: run.completedRuns,
-      settings: { ...blank().settings, ...(run.settings ?? {}) },
+      settings: { ...defaults(), ...(run.settings ?? {}) },
       flags: run.flags ?? {},
     });
     if (parsed.lift) localStorage.setItem(LIFT_KEY, JSON.stringify(parsed.lift));

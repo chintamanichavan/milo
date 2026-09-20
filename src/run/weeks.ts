@@ -3,11 +3,19 @@ export type Kind = 'run' | 'walk';
 export interface Segment {
   kind: Kind;
   sec: number;
+  /** post-programme plans colour their runs by effort */
+  effort?: 'easy' | 'steady' | 'hard';
+  /** metronome target for rhythm runs */
+  bpm?: number;
+  /** run until this distance instead of this clock, when GPS is on */
+  untilKm?: number;
 }
 
 export interface Plan {
   week: number;
   run: number;
+  /** which programme this run belongs to */
+  programme?: string;
   label: string;
   /** How to build this run as a custom interval workout on the Watch. */
   watch: string;
@@ -123,21 +131,4 @@ export function planFor(week: number, run: number): Plan {
 /** "29 minutes, warm-up and cool-down walks included" */
 export function totalLine(plan: Plan): string {
   return `${Math.round(plan.totalSec / 60)} minutes, warm-up and cool-down walks included`;
-}
-
-export function clock(sec: number): string {
-  const s = Math.max(0, Math.ceil(sec));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/** Spoken and written length: "90 seconds", "5 minutes". */
-export function spellDuration(sec: number): string {
-  if (sec < 120) return `${sec} seconds`;
-  const min = sec / 60;
-  return `${Number.isInteger(min) ? min : min.toFixed(1)} minutes`;
-}
-
-/** Short written length: 90″ or 5′ */
-export function shortDuration(sec: number): string {
-  return sec < 120 ? `${sec}″` : `${+(sec / 60).toFixed(1)}′`;
 }
