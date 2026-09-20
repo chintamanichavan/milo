@@ -1,6 +1,21 @@
 import { registerSW } from 'virtual:pwa-register';
 import './style.css';
 import { advance } from './clock';
+import {
+  cookHomeView,
+  cookModeView,
+  plannerView,
+  recipeEditView,
+  recipeView,
+  shoppingView,
+} from './cook/views/pages';
+import {
+  fuelTodayView,
+  nutrientsView,
+  programView,
+  trendsView,
+  weightView,
+} from './fuel/views/pages';
 import { mountNav, setActiveTab, type Tab } from './ui/nav';
 import { focusBoardView } from './focus/views/board';
 import { flightView } from './focus/views/flight';
@@ -74,6 +89,18 @@ function route(): void {
   else if (parts[0] === 'focus' && parts[1]?.startsWith('stats')) cleanup = statsView(app);
   else if (parts[0] === 'focus' && parts[1] === 'settings') cleanup = focusSettingsView(app);
   else if (parts[0] === 'focus') cleanup = focusBoardView(app);
+  else if (parts[0] === 'cook' && parts[1] === 'recipe') cleanup = recipeView(app, parts[2]);
+  else if (parts[0] === 'cook' && parts[1] === 'edit') cleanup = recipeEditView(app, parts[2]);
+  else if (parts[0] === 'cook' && parts[1] === 'new') cleanup = recipeEditView(app);
+  else if (parts[0] === 'cook' && parts[1] === 'mode') cleanup = cookModeView(app, parts[2]);
+  else if (parts[0] === 'cook' && parts[1] === 'list') cleanup = shoppingView(app);
+  else if (parts[0] === 'cook' && parts[1] === 'plan') cleanup = plannerView(app);
+  else if (parts[0] === 'cook') cleanup = cookHomeView(app);
+  else if (parts[0] === 'fuel' && parts[1] === 'nutrients') cleanup = nutrientsView(app);
+  else if (parts[0] === 'fuel' && parts[1] === 'weight') cleanup = weightView(app);
+  else if (parts[0] === 'fuel' && parts[1] === 'trends') cleanup = trendsView(app);
+  else if (parts[0] === 'fuel' && parts[1] === 'program') cleanup = programView(app);
+  else if (parts[0] === 'fuel') cleanup = fuelTodayView(app);
   else cleanup = todayView(app);
   const tab = (parts[0] || 'run') as Tab;
   setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits'].includes(tab) ? tab : 'run');

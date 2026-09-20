@@ -654,7 +654,7 @@ export function routineEditView(root: HTMLElement, id: string): () => void {
         .slice(0, 24);
       host.querySelector('#pickList')!.innerHTML = list
         .map(
-          (e) => `<button class="card tap" data-add="${e.id}"><b>${e.name}</b>
+          (e) => `<button class="card tap" data-done="1" data-add="${e.id}"><b>${e.name}</b>
             <span class="tag">${e.muscle}</span></button>`,
         )
         .join('');
@@ -711,7 +711,7 @@ export function routineEditView(root: HTMLElement, id: string): () => void {
         `Swap ${current.name}`,
         `<div class="cards">${alternatives(current, 10)
           .map(
-            (a) => `<button class="card tap" data-alt="${a.id}"><b>${a.name}</b>
+            (a) => `<button class="card tap" data-done="1" data-alt="${a.id}"><b>${a.name}</b>
               <span class="tag">${a.muscle} · ${a.gear}</span></button>`,
           )
           .join('')}</div>`,
