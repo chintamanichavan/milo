@@ -17,9 +17,15 @@ export function watchGlyph(): string {
   </svg>`;
 }
 
-/** The two halves of the app. */
-export function tabBar(active: 'run' | 'lift'): string {
-  const tab = (id: 'run' | 'lift', label: string, href: string): string =>
+export type Tab = 'run' | 'lift' | 'focus';
+
+/** The three halves of the app. */
+export function tabBar(active: Tab): string {
+  const tab = (id: Tab, label: string, href: string): string =>
     `<a class="tab tap${active === id ? ' on' : ''}" href="${href}">${label}</a>`;
-  return `<nav class="tabs">${tab('run', 'RUN', '#/')}${tab('lift', 'LIFT', '#/lift')}</nav>`;
+  return `<nav class="tabs">${tab('run', 'RUN', '#/')}${tab('lift', 'LIFT', '#/lift')}${tab(
+    'focus',
+    'FOCUS',
+    '#/focus',
+  )}</nav>`;
 }

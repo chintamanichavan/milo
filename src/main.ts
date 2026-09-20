@@ -1,6 +1,16 @@
 import { registerSW } from 'virtual:pwa-register';
 import './style.css';
 import { advance } from './clock';
+import { focusBoardView } from './focus/views/board';
+import { flightView } from './focus/views/flight';
+import { landedView } from './focus/views/landed';
+import {
+  badgesView,
+  focusSettingsView,
+  hangarView,
+  routesView,
+  statsView,
+} from './focus/views/pages';
 import { liftExerciseView } from './lift/views/exercise';
 import { liftSessionView } from './lift/views/session';
 import { liftTodayView } from './lift/views/today';
@@ -20,6 +30,15 @@ function route(): void {
   else if (parts[0] === 'lift' && parts[1] === 'session') cleanup = liftSessionView(app, parts[2]);
   else if (parts[0] === 'lift' && parts[1] === 'exercise') cleanup = liftExerciseView(app, parts[2]);
   else if (parts[0] === 'lift') cleanup = liftTodayView(app);
+  else if (parts[0] === 'focus' && parts[1] === 'flight')
+    cleanup = flightView(app, Number(parts[2]) || 25, decodeURIComponent(parts[3] ?? ''));
+  else if (parts[0] === 'focus' && parts[1] === 'landed') cleanup = landedView(app);
+  else if (parts[0] === 'focus' && parts[1] === 'routes') cleanup = routesView(app);
+  else if (parts[0] === 'focus' && parts[1] === 'hangar') cleanup = hangarView(app);
+  else if (parts[0] === 'focus' && parts[1] === 'badges') cleanup = badgesView(app);
+  else if (parts[0] === 'focus' && parts[1]?.startsWith('stats')) cleanup = statsView(app);
+  else if (parts[0] === 'focus' && parts[1] === 'settings') cleanup = focusSettingsView(app);
+  else if (parts[0] === 'focus') cleanup = focusBoardView(app);
   else cleanup = todayView(app);
   scrollTo(0, 0);
 }

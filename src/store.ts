@@ -1,3 +1,4 @@
+import { FOCUS_KEY } from './focus/store';
 import { LIFT_KEY } from './lift/store';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
@@ -124,6 +125,7 @@ export function exportFile(): void {
   const bundle = {
     run: load(),
     lift: JSON.parse(localStorage.getItem(LIFT_KEY) ?? 'null') as unknown,
+    focus: JSON.parse(localStorage.getItem(FOCUS_KEY) ?? 'null') as unknown,
   };
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -136,8 +138,11 @@ export function exportFile(): void {
 
 export async function importFile(file: File): Promise<boolean> {
   try {
-    const parsed = JSON.parse(await file.text()) as { run?: Partial<State>; lift?: unknown } &
-      Partial<State>;
+    const parsed = JSON.parse(await file.text()) as {
+      run?: Partial<State>;
+      lift?: unknown;
+      focus?: unknown;
+    } & Partial<State>;
     // older exports were the run half on its own
     const run = Array.isArray(parsed.completedRuns) ? parsed : parsed.run;
     if (!run || !Array.isArray(run.completedRuns)) return false;
@@ -147,6 +152,7 @@ export async function importFile(file: File): Promise<boolean> {
       flags: run.flags ?? {},
     });
     if (parsed.lift) localStorage.setItem(LIFT_KEY, JSON.stringify(parsed.lift));
+    if (parsed.focus) localStorage.setItem(FOCUS_KEY, JSON.stringify(parsed.focus));
     return true;
   } catch {
     return false;

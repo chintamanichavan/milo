@@ -6,7 +6,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png'],
-      workbox: { globPatterns: ['**/*.{js,css,html,png,svg,ico}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,jpg}'],
+        // the satellite map only works online, so it is never worth precaching
+        globIgnores: ['**/satmap-*.js', '**/satmap-*.css'],
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      },
       manifest: {
         name: 'Milo',
         short_name: 'Milo',
