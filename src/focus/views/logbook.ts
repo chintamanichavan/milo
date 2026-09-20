@@ -77,8 +77,8 @@ export function editFlight(index: number, done: () => void): void {
            .join('')}
        </select></label>
      <div class="row-actions">
-       <button class="big tap" id="eSave">SAVE</button>
-       <button class="link tap" id="eDelete">Delete this flight</button>
+       <button class="big tap" data-done="1" id="eSave">SAVE</button>
+       <button class="link tap" data-done="1" id="eDelete">Delete this flight</button>
      </div>`,
   );
   host.querySelector('#eSave')!.addEventListener('click', () => {

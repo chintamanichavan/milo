@@ -96,8 +96,8 @@ export function runHistoryView(root: HTMLElement): () => void {
        <label class="field"><span class="tag">Note</span>
          <input class="dest" id="hNote" value="${r.note ?? ''}"></label>
        <div class="row-actions">
-         <button class="big tap" id="hSave">SAVE</button>
-         <button class="link tap" id="hDelete">Delete this run</button>
+         <button class="big tap" data-done="1" id="hSave">SAVE</button>
+         <button class="link tap" data-done="1" id="hDelete">Delete this run</button>
        </div>`,
     );
     host.querySelector('#hSave')!.addEventListener('click', () => {
@@ -122,7 +122,7 @@ export function runHistoryView(root: HTMLElement): () => void {
       `<label class="field"><span class="tag">Week</span><input class="num" id="aWeek" value="1"></label>
        <label class="field"><span class="tag">Run</span><input class="num" id="aRun" value="1"></label>
        <label class="field"><span class="tag">Minutes</span><input class="num" id="aMin" value="30"></label>
-       <button class="big tap" id="aSave">LOG IT</button>`,
+       <button class="big tap" data-done="1" id="aSave">LOG IT</button>`,
     );
     host.querySelector('#aSave')!.addEventListener('click', () => {
       const num = (id: string): number => Number((host.querySelector(`#${id}`) as HTMLInputElement).value);
@@ -259,7 +259,7 @@ export function certificateView(root: HTMLElement): () => void {
       <label class="field"><span class="tag">Name on the certificate</span>
         <input class="dest" id="certName" value="${name}" placeholder="your name"></label>
       <div class="row-actions">
-        <button class="big tap" id="share">SHARE IT</button>
+        <button class="big tap" data-done="1" id="share">SHARE IT</button>
         <a class="link tap" href="#/run/plans">What comes next →</a>
       </div>
     </div>`,
@@ -469,7 +469,7 @@ export function runSettingsView(root: HTMLElement): () => void {
     const host = sheet(
       'Reset the programme',
       `<p class="line">This clears your runs and starts week one again. Lifting, focus and the rest stay as they are.</p>
-       <div class="row-actions"><button class="big tap" id="really">YES, RESET</button></div>`,
+       <div class="row-actions"><button class="big tap" data-done="1" id="really">YES, RESET</button></div>`,
     );
     host.querySelector('#really')!.addEventListener('click', () => {
       const next = load();

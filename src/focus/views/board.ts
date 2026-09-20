@@ -107,7 +107,7 @@ export function focusBoardView(root: HTMLElement): () => void {
                 .join('')}</div>`
             : ''
         }
-        <button class="big tap" id="takeoff">TAKE OFF</button>
+        <button class="big tap" data-done="1" id="takeoff">TAKE OFF</button>
         <p class="line sub mid flying">${planeGlyph(aircraft, 40)}<span>flying the ${
           aircraft === 'paper' ? 'paper plane' : aircraft
         }</span></p>
@@ -184,7 +184,7 @@ export function focusBoardView(root: HTMLElement): () => void {
          <input class="dest" id="mLabel" value="${labels[0] ?? ''}"></label>
        <label class="field"><span class="tag">Date</span>
          <input class="dest" id="mDate" type="date" value="${dayKey(new Date())}"></label>
-       <button class="big tap" id="mSave">LOG IT</button>`,
+       <button class="big tap" data-done="1" id="mSave">LOG IT</button>`,
     );
     host.querySelector('#mSave')!.addEventListener('click', () => {
       const m = Math.max(1, Number((host.querySelector('#mMin') as HTMLInputElement).value) || 0);

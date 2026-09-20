@@ -16,6 +16,10 @@ export function sheet(title: string, body: string): HTMLElement {
   };
   host.querySelector('.sheet-back')!.addEventListener('click', close);
   host.querySelector('[data-close]')!.addEventListener('click', close);
+  // anything marked data-done closes the sheet after its own handler has run
+  host.addEventListener('click', (ev) => {
+    if ((ev.target as HTMLElement).closest('[data-done]')) setTimeout(close, 0);
+  });
   host.addEventListener('keydown', (ev) => {
     if ((ev as KeyboardEvent).key === 'Escape') close();
   });

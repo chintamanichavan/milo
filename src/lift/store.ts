@@ -4,6 +4,7 @@ import type { SetLog } from './progression';
 export interface Entry {
   exerciseId: string;
   sets: SetLog[];
+  note?: string;
 }
 
 export interface Session {
@@ -11,6 +12,33 @@ export interface Session {
   routineId: string;
   entries: Entry[];
   durationSec: number;
+  note?: string;
+  /** what this session beat */
+  prs?: { exerciseId: string; kind: string; value: number }[];
+}
+
+export interface Measurement {
+  date: string;
+  weightLb?: number;
+  bodyFat?: number;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  arm?: number;
+  thigh?: number;
+}
+
+export type Units = 'lb' | 'kg';
+
+export interface LiftSettings {
+  units: Units;
+  restSec: number;
+  barLb: number;
+  plates: number[];
+  /** generated programme, if any */
+  planId?: string;
+  planWeek?: number;
+  deloadNext?: boolean;
 }
 
 export interface Active extends Session {
@@ -25,9 +53,19 @@ export interface LiftState {
   /** per-exercise rest, in seconds */
   rest: Record<string, number>;
   active: Active | null;
+  favourites: string[];
+  measurements: Measurement[];
+  settings: LiftSettings;
 }
 
 export const LIFT_KEY = 'c25k.lift.v1';
+
+const defaults = (): LiftSettings => ({
+  units: 'lb',
+  restSec: 90,
+  barLb: 45,
+  plates: [45, 35, 25, 10, 5, 2.5],
+});
 
 const blank = (): LiftState => ({
   routines: DEFAULT_ROUTINES.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
@@ -35,13 +73,21 @@ const blank = (): LiftState => ({
   customs: [],
   rest: {},
   active: null,
+  favourites: [],
+  measurements: [],
+  settings: defaults(),
 });
 
 export function loadLift(): LiftState {
   try {
     const raw = localStorage.getItem(LIFT_KEY);
     if (!raw) return blank();
-    return { ...blank(), ...(JSON.parse(raw) as Partial<LiftState>) };
+    const parsed = JSON.parse(raw) as Partial<LiftState>;
+    return {
+      ...blank(),
+      ...parsed,
+      settings: { ...defaults(), ...(parsed.settings ?? {}) },
+    };
   } catch {
     return blank();
   }
@@ -58,8 +104,10 @@ export function exerciseById(state: LiftState, id: string): Exercise {
       id,
       name: id,
       muscle: 'other',
+      also: '',
       gear: 'barbell',
       inc: 5,
+      how: '',
     }
   );
 }
@@ -116,4 +164,127 @@ export function sessionsThisWeek(state: LiftState): number {
 export function daysAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+export function setLiftSettings(patch: Partial<LiftSettings>): LiftSettings {
+  const state = loadLift();
+  state.settings = { ...state.settings, ...patch };
+  saveLift(state);
+  return state.settings;
+}
+
+export function toggleFavourite(id: string): void {
+  const state = loadLift();
+  state.favourites = state.favourites.includes(id)
+    ? state.favourites.filter((f) => f !== id)
+    : [...state.favourites, id];
+  saveLift(state);
+}
+
+export function addCustomExercise(exercise: Exercise): void {
+  const state = loadLift();
+  state.customs.push(exercise);
+  saveLift(state);
+}
+
+export function saveRoutine(routine: Routine): void {
+  const state = loadLift();
+  const at = state.routines.findIndex((r) => r.id === routine.id);
+  if (at >= 0) state.routines[at] = routine;
+  else state.routines.push(routine);
+  saveLift(state);
+}
+
+export function deleteRoutine(id: string): void {
+  const state = loadLift();
+  state.routines = state.routines.filter((r) => r.id !== id);
+  saveLift(state);
+}
+
+export function updateSession(index: number, patch: Partial<Session>): void {
+  const state = loadLift();
+  if (!state.sessions[index]) return;
+  state.sessions[index] = { ...state.sessions[index], ...patch };
+  saveLift(state);
+}
+
+export function deleteSession(index: number): void {
+  const state = loadLift();
+  state.sessions.splice(index, 1);
+  saveLift(state);
+}
+
+export function addMeasurement(entry: Measurement): void {
+  const state = loadLift();
+  state.measurements.push(entry);
+  state.measurements.sort((a, b) => a.date.localeCompare(b.date));
+  saveLift(state);
+}
+
+export const lastPerformed = (state: LiftState, routineId: string): Session | undefined =>
+  [...state.sessions].reverse().find((s) => s.routineId === routineId);
+
+/** bodyweight now, smoothed a little, in pounds */
+export function trendWeight(state: LiftState): number {
+  const recent = state.measurements.filter((m) => m.weightLb).slice(-7);
+  if (recent.length === 0) return 0;
+  return recent.reduce((s, m) => s + (m.weightLb ?? 0), 0) / recent.length;
+}
+
+/** working sets per muscle in the last seven days */
+export function weeklyVolume(state: LiftState): Map<string, number> {
+  const since = Date.now() - 7 * 86_400_000;
+  const out = new Map<string, number>();
+  for (const session of state.sessions) {
+    if (new Date(session.date).getTime() < since) continue;
+    for (const entry of session.entries) {
+      const muscle = exerciseById(state, entry.exerciseId).muscle;
+      const sets = entry.sets.filter((s) => s.done && s.type !== 'w').length;
+      if (sets) out.set(muscle, (out.get(muscle) ?? 0) + sets);
+    }
+  }
+  return out;
+}
+
+/** weeks in a row with at least two sessions */
+export function weekStreak(state: LiftState): number {
+  let streak = 0;
+  for (let w = 0; w < 104; w++) {
+    const end = Date.now() - w * 7 * 86_400_000;
+    const start = end - 7 * 86_400_000;
+    const count = state.sessions.filter((s) => {
+      const t = new Date(s.date).getTime();
+      return t >= start && t < end;
+    }).length;
+    if (count >= 2) streak++;
+    else if (w > 0) break;
+  }
+  return streak;
+}
+
+export const KG = 0.453_592_37;
+
+export const showWeight = (lb: number, units: Units): string =>
+  units === 'kg' ? `${(lb * KG).toFixed(1)} kg` : `${Math.round(lb * 10) / 10} lb`;
+
+export const toLb = (value: number, units: Units): number => (units === 'kg' ? value / KG : value);
+
+export const fromLb = (lb: number, units: Units): number =>
+  units === 'kg' ? Math.round(lb * KG * 10) / 10 : Math.round(lb * 10) / 10;
+
+/** increments follow the units: 2.5 kg and 1.25 kg plates exist */
+export const incFor = (inc: number, units: Units): number =>
+  units === 'kg' ? (inc >= 10 ? 5 / KG : 2.5 / KG) : inc;
+
+/** what to hang on each side of the bar */
+export function plates(totalLb: number, barLb: number, available: number[]): number[] {
+  let side = (totalLb - barLb) / 2;
+  const out: number[] = [];
+  for (const plate of [...available].sort((a, b) => b - a)) {
+    while (side >= plate - 0.01) {
+      out.push(plate);
+      side -= plate;
+    }
+  }
+  return out;
 }

@@ -1,9 +1,13 @@
 import { miloMark, tabBar } from '../../badge';
+import { barList } from '../../ui/chart';
+import { liftSubNav } from './pages';
 import { REST_DEFAULT } from '../data';
 import {
   daysAgo,
   exerciseById,
   loadLift,
+  weeklyVolume,
+  weekStreak,
   nextRoutine,
   routineById,
   sessionsThisWeek,
@@ -42,6 +46,28 @@ function historyBlock(state: LiftState): string {
   return `<div class="hist"><p class="tag">History</p>${rows}</div>`;
 }
 
+/** quiet suggestions when a muscle is under the weekly band */
+function nudges(state: LiftState): string {
+  const volume = weeklyVolume(state);
+  if (volume.size === 0) return '';
+  const thin = [...volume.entries()].filter(([, sets]) => sets < 10);
+  const rows = [...volume.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value]) => ({ label, value, note: value < 10 ? '· room for more' : '' }));
+  return `<div class="panel">
+    <p class="tag">Sets this week<span>10–20 per muscle</span></p>
+    ${barList(rows, ' sets')}
+    ${
+      thin.length
+        ? `<p class="line sub">Light on ${thin
+            .slice(0, 3)
+            .map(([m]) => m)
+            .join(', ')} — one more set each would do it.</p>`
+        : ''
+    }
+  </div>`;
+}
+
 export function liftTodayView(root: HTMLElement): () => void {
   const state = loadLift();
   const active = state.active;
@@ -57,8 +83,11 @@ export function liftTodayView(root: HTMLElement): () => void {
         <span class="wordmark">${miloMark()}<b>MILO</b></span>
         ${tabBar('lift')}
       </header>
+      ${liftSubNav('')}
       <div class="hero">
-        <p class="tag section">Lift · ${sessionsThisWeek(state)} this week</p>
+        <p class="tag section">Lift · ${sessionsThisWeek(state)} this week${
+          weekStreak(state) > 1 ? ` · ${weekStreak(state)}-week streak` : ''
+        }${state.settings.deloadNext ? ' · deload next' : ''}</p>
         <h1>${routine.name}<span><i> · </i>${
           active ? 'in progress' : last ? `last ${daysAgo(last.date)}` : 'not yet done'
         }</span></h1>
@@ -75,6 +104,7 @@ export function liftTodayView(root: HTMLElement): () => void {
             : ''
         }
       </div>
+      ${nudges(state)}
       ${historyBlock(state)}
     </section>`;
   return () => {};

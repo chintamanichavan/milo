@@ -76,6 +76,12 @@ export function doneView(root: HTMLElement): () => void {
             <div class="route-wrap">${routeSvg(result.path ?? [])}</div>`
           : ''
       }
+      ${
+        state.settings.treadmill && !result.distanceKm
+          ? `<label class="field treadmill"><span class="tag">Distance on the treadmill</span>
+              <input class="num" id="tread" inputmode="decimal" placeholder="${units}"></label>`
+          : ''
+      }
       <div class="feel">
         <p class="tag">How did that feel?</p>
         <div class="chips" id="feel">
@@ -106,6 +112,14 @@ export function doneView(root: HTMLElement): () => void {
     chip.classList.add('on');
     updateRun(index, { feel: chip.dataset.feel as CompletedRun['feel'] });
     toast('Noted');
+  });
+  root.querySelector('#tread')?.addEventListener('change', (ev) => {
+    const value = Number((ev.target as HTMLInputElement).value);
+    if (value > 0)
+      updateRun(index, {
+        distanceKm: units === 'km' ? value : value * 1.609_344,
+      });
+    toast('Distance saved');
   });
   root.querySelector('#note')!.addEventListener('change', (ev) => {
     updateRun(index, { note: (ev.target as HTMLInputElement).value.trim() });

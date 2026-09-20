@@ -192,6 +192,8 @@ export function runView(
       say(line, persona);
       liveEl.textContent = line;
       tracker?.setKind(seg.kind, 0);
+      if (spot.index === segs.length - 1)
+        hintEl.innerHTML = '<a class="tap" href="#/run/tips">cool-down stretches →</a>';
       if (seg.bpm && settings.metronome) metronome(seg.bpm);
       else stopMetronome();
     }
