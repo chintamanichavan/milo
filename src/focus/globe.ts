@@ -77,7 +77,6 @@ const VERT = `
 const EARTH_FRAG = `
   uniform sampler2D dayMap;
   uniform sampler2D nightMap;
-  uniform sampler2D topoMap;
   uniform sampler2D normalMap;
   uniform sampler2D waterMap;
   uniform sampler2D cloudMap;
@@ -89,7 +88,6 @@ const EARTH_FRAG = `
   uniform float specAmount;
   uniform float waveAmount;
   uniform float seaTime;
-  uniform float topoAmount;
   uniform float normalAmount;
   uniform float nightGain;
   varying vec2 vUv;
@@ -108,12 +106,6 @@ const EARTH_FRAG = `
     vec3 ground = normalize(normal + east * slope.x - north * slope.y);
     float litGround = dot(ground, sun);
     float relief = mix(1.0, clamp(1.0 + (litGround - lit) * 2.2, 0.55, 1.55), normalAmount);
-
-    // older, cheaper relief for tiers without the normal map
-    float texel = 1.0 / 2048.0;
-    float hx = texture2D(topoMap, vUv + vec2(texel, 0.0)).r - texture2D(topoMap, vUv - vec2(texel, 0.0)).r;
-    float hy = texture2D(topoMap, vUv + vec2(0.0, texel)).r - texture2D(topoMap, vUv - vec2(0.0, texel)).r;
-    relief *= mix(1.0, clamp(1.0 + (hx + hy) * 6.0, 0.75, 1.3), topoAmount);
 
     vec3 day = texture2D(dayMap, vUv).rgb * relief;
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 1.12);
@@ -326,10 +318,9 @@ export async function createGlobe(
   };
 
   const blank = new THREE.Texture();
-  const [dayMap, nightMap, topoMap, waterMap, cloudMap, normalMap] = await Promise.all([
+  const [dayMap, nightMap, waterMap, cloudMap, normalMap] = await Promise.all([
     loadOnce('/earth/day-4k.ktx2', '/earth/day.jpg', true),
     loadOnce('/earth/night-2k.ktx2', '/earth/night.jpg', true),
-    limits.topo && !limits.normals ? loadOnce('/earth/topo-2k.ktx2', '/earth/topo.jpg', false) : Promise.resolve(blank),
     limits.water ? loadOnce('/earth/water-1k.ktx2', '/earth/water.jpg', false) : Promise.resolve(blank),
     limits.clouds ? loadOnce('/earth/clouds-2k.ktx2', '/earth/clouds.jpg', false) : Promise.resolve(blank),
     limits.normals ? loadOnce('/earth/normal-2k.ktx2', '/earth/normal.jpg', false) : Promise.resolve(blank),
@@ -350,7 +341,6 @@ export async function createGlobe(
       uniforms: {
         dayMap: { value: dayMap },
         nightMap: { value: nightMap },
-        topoMap: { value: topoMap },
         normalMap: { value: normalMap },
         waterMap: { value: waterMap },
         cloudMap: { value: cloudMap },
@@ -362,7 +352,6 @@ export async function createGlobe(
         specAmount: { value: limits.water ? 1 : 0 },
         waveAmount,
         seaTime,
-        topoAmount: { value: limits.topo && !limits.normals ? 1 : 0 },
         normalAmount: { value: limits.normals ? 1 : 0 },
         nightGain: { value: limits.nightGain },
       },
