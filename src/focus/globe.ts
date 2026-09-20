@@ -83,6 +83,7 @@ const EARTH_FRAG = `
   uniform vec3 sunDir;
   uniform float cloudShift;
   uniform float cloudAmount;
+  uniform float cloudVisible;
   uniform float specAmount;
   uniform float topoAmount;
   uniform float normalAmount;
@@ -133,9 +134,16 @@ const EARTH_FRAG = `
     // cloud layer, with a soft shadow just behind it
     vec2 cloudUv = vec2(vUv.x + cloudShift, vUv.y);
     float cloud = texture2D(cloudMap, cloudUv).g * cloudAmount;
-    float shadow = texture2D(cloudMap, cloudUv - vec2(0.004, 0.0)).g * cloudAmount;
-    col *= 1.0 - shadow * 0.25 * dayAmount;
-    col = mix(col, mix(vec3(0.08, 0.09, 0.12), vec3(1.0), dayAmount), cloud * 0.55 * (0.35 + dayAmount));
+    // the shadow is the cloud that stands between this ground and the sun, so it
+    // falls away from the light and stretches out as the sun gets low
+    // ground distance to walk towards the sun, in degrees; longitudes crowd
+    // together away from the equator, so the map step is not the ground step
+    float cosLat = max(0.2, length(vec2(normal.x, normal.z)));
+    float reach = 2.2 / max(0.25, abs(lit));
+    vec2 throwUv = vec2(dot(sun, east) * reach / (360.0 * cosLat), dot(sun, north) * reach / 180.0);
+    float shadow = texture2D(cloudMap, cloudUv + clamp(throwUv, -0.03, 0.03)).g * cloudAmount;
+    col *= 1.0 - shadow * 0.3 * dayAmount;
+    col = mix(col, mix(vec3(0.08, 0.09, 0.12), vec3(1.0), dayAmount), cloud * 0.55 * cloudVisible * (0.35 + dayAmount));
 
     // warmth along the terminator, and limb darkening towards it
     float dusk = exp(-pow(lit * 14.0, 2.0));
@@ -328,6 +336,7 @@ export async function createGlobe(
         sunDir,
         cloudShift,
         cloudAmount: { value: limits.clouds ? 1 : 0 },
+        cloudVisible: { value: 1 },
         specAmount: { value: limits.water ? 1 : 0 },
         topoAmount: { value: limits.topo && !limits.normals ? 1 : 0 },
         normalAmount: { value: limits.normals ? 1 : 0 },
@@ -906,9 +915,11 @@ export async function createGlobe(
         atmosphere: withAtmosphere = true,
         specular: withSpecular = true,
         normals: withNormals = limits.normals,
+        cloudLayer: withCloudLayer = true,
       }) {
         const uniforms = (earth.material as THREE.ShaderMaterial).uniforms;
         uniforms.cloudAmount.value = withClouds ? 1 : 0;
+        uniforms.cloudVisible.value = withCloudLayer ? 1 : 0;
         uniforms.specAmount.value = withSpecular ? 1 : 0;
         uniforms.normalAmount.value = withNormals && limits.normals ? 1 : 0;
         atmosphere.visible = withAtmosphere;
