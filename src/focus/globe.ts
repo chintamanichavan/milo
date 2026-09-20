@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { budget, Governor } from './quality';
+import { createTileLayer, type TileLayer } from './tiles';
 import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
 
@@ -18,6 +19,7 @@ export interface GlobeHandle {
   setPhase(phase: string): void;
   setCamera(mode: CameraMode, manual?: boolean): void;
   cameraMode(): CameraMode;
+  tiles(): number;
   setAircraft(id: string): void;
   shake(strength?: number): void;
   setRoute(route: GlobeRoute): void;
@@ -298,6 +300,9 @@ export async function createGlobe(
   const sunDir = { value: sunDirection(clock()) };
   const cloudShift = { value: 0 };
 
+  // satellite imagery on top of the base map, when there is a network
+  let tileLayer: TileLayer | null = null;
+
   const earth = new THREE.Mesh(
     new THREE.SphereGeometry(R, limits.sphereSegments[0], limits.sphereSegments[1]),
     new THREE.ShaderMaterial({
@@ -547,6 +552,7 @@ export async function createGlobe(
   const cutFrom = new THREE.Vector3();
   let lastCycle = Date.now();
   let lastSpring = performance.now();
+  let lastTiles = 0;
   let shakeUntil = 0;
   let shakeAmount = 0;
   /** the ground-truth tests park the camera and expect it to stay put */
@@ -714,6 +720,15 @@ export async function createGlobe(
     starTime.value = now / 1000;
     if (showPlane) placePlane();
 
+    // stream sharper imagery around whatever the camera is looking at
+    if (tileLayer) {
+      tileLayer.fade(Math.min(0.05, (now - lastSpring) / 1000));
+      if (now - lastTiles > 700) {
+        lastTiles = now;
+        tileLayer.update(desiredTarget.lengthSq() > 0.01 ? desiredTarget : plane.position, camera.position.length());
+      }
+    }
+
     // a two and a half second dolly in from a far shot, then cruise
     const introT = flyIn ? Math.min(1, (now - introStart) / INTRO_MS) : 1;
     if (frozen) {
@@ -799,6 +814,7 @@ export async function createGlobe(
     { threshold: 0.01 },
   );
   seen.observe(host);
+  if (showPlane && navigator.onLine) tileLayer = createTileLayer(scene);
   resize();
   if (route) buildRoute(route);
   resize();
@@ -833,6 +849,13 @@ export async function createGlobe(
       },
       sunDirection: () => sunDirection(clock()).toArray(),
       fps: () => governor.fps(),
+      tiles: () => tileLayer?.count() ?? 0,
+      setTiles: (on: boolean) => {
+        if (!on) {
+          tileLayer?.dispose();
+          tileLayer = null;
+        } else if (!tileLayer && showPlane) tileLayer = createTileLayer(scene);
+      },
       scale: () => governor.scale,
       projectVec: (x: number, y: number, z: number) => {
         const v = new THREE.Vector3(x, y, z).project(camera);
@@ -884,6 +907,7 @@ export async function createGlobe(
       cutStart = performance.now();
     },
     cameraMode: () => cameraMode,
+    tiles: () => tileLayer?.count() ?? 0,
     setAircraft(id) {
       aircraftId = id;
       plane.remove(model.group);
@@ -932,6 +956,7 @@ export async function createGlobe(
       cancelAnimationFrame(raf);
       observer.disconnect();
       seen.disconnect();
+      tileLayer?.dispose();
       controls?.dispose();
       renderer.dispose();
       renderer.domElement.remove();

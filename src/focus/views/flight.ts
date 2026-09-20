@@ -77,6 +77,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
           </svg>
         </div>
         <div class="sky-fade"></div>
+        <p class="attribution" id="attribution" hidden></p>
       </div>
       <div class="strip">
         <div class="strip-line">
@@ -236,6 +237,8 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     pipPlane.setAttribute('cx', String(at.x));
     pipPlane.setAttribute('cy', String(at.y));
     const live = sky?.cameraMode?.() ?? CAMERAS[camIndex];
+    const streaming = (sky?.tiles?.() ?? 0) > 0;
+    if (attribution.hidden === streaming) attribution.hidden = !streaming;
     pip.hidden = !['chase', 'wing'].includes(live);
 
     const nextPhase = phaseAt(t);
@@ -374,6 +377,10 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   for (const evt of ['pointerdown', 'keydown'] as const)
     document.addEventListener(evt, wake, { capture: true, passive: true });
 
+  const attribution = root.querySelector<HTMLElement>('#attribution')!;
+  void import('../tiles').then(({ ESRI_ATTRIBUTION }) => {
+    attribution.textContent = ESRI_ATTRIBUTION;
+  });
   const hud = root.querySelector<HTMLElement>('#fps');
   const ticker = window.setInterval(() => {
     paint();
