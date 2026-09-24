@@ -1,11 +1,12 @@
-import { beep, unlockAudio } from '../../audio';
 import { miloMark } from '../../badge';
 import { now } from '../../clock';
 import { downloadIcs } from '../../run/ics';
 import { barList, columns } from '../../ui/chart';
-import { sheet } from '../../ui/sheet';
+import { closeSheet, sheet } from '../../ui/sheet';
 import { toast } from '../../ui/toast';
 import { moodFor, petSvg } from '../art';
+import { factFor } from '../facts';
+import { chime, CHIMES } from '../sound';
 import {
   ACHIEVEMENTS,
   amount,
@@ -29,6 +30,7 @@ import {
   cupFor,
   deleteCustom,
   deleteSip,
+  drinkKcal,
   drinkById,
   dropChallenge,
   effectiveOf,
@@ -38,6 +40,8 @@ import {
   loadWater,
   logSip,
   monthGrid,
+  panelDrinks,
+  recap,
   rawOf,
   refreshHeat,
   remindersIcs,
@@ -94,10 +98,21 @@ function celebrate(earned: string[]): void {
   if (earned.length) toast(earned.join(' · '), true);
 }
 
-function drop(state: WaterState): void {
+/** the chime on a pour, or the cheer when that pour meets the goal */
+function sound(state: WaterState, cheer: boolean): void {
   if (!state.settings.sound) return;
-  unlockAudio();
-  beep('drop', true);
+  chime(cheer ? state.settings.cheer : state.settings.chime);
+}
+
+/** log a drink with its chime; the cheer if it is the one that meets the goal */
+function pourNow(drinkId: string, oz?: number): { text: string; earned: string[] } {
+  const before = loadWater();
+  const wasMet = effectiveOn(before) >= goalToday(before) - 0.05;
+  const { sip, earned } = logSip(drinkId, oz);
+  const after = loadWater();
+  const nowMet = effectiveOn(after) >= goalToday(after) - 0.05;
+  sound(after, !wasMet && nowMet);
+  return { text: `${amount(sip.oz, after.settings.unit)} ${drinkById(after, sip.drinkId).name.toLowerCase()}`, earned };
 }
 
 /** the cup the next tap pours, when you want something other than the drink's own */
@@ -120,6 +135,7 @@ export function waterTodayView(root: HTMLElement): () => void {
     const left = Math.max(0, goal - drunk);
     const who = COMPANIONS.find((c) => c.id === state.settings.character)!;
     const caf = caffeine(state);
+    const kcal = drinkKcal(state);
     const nudges = schedule(state);
     const due = nudges.filter((n) => n.state === 'due').pop();
     const lastSip = sips.length ? sips[sips.length - 1].at : 0;
@@ -174,7 +190,7 @@ export function waterTodayView(root: HTMLElement): () => void {
               <button class="chip tap" data-cup="custom">custom</button>
             </div>
             <div class="wl-grid" id="drinks">
-              ${allDrinks(state)
+              ${panelDrinks(state)
                 .map(
                   (d) => `<button class="wl-drink tap" data-drink="${d.id}" aria-label="${d.name}, ${amount(cupOverride ?? cupFor(state, d.id), unit)}">
                     ${glyph(d.glyph, 26)}<b>${d.name}</b>
@@ -186,6 +202,7 @@ export function waterTodayView(root: HTMLElement): () => void {
             <div class="chips">
               <button class="chip tap" id="undo"${state.sips.length ? '' : ' disabled'}>undo last</button>
               <button class="chip tap" id="earlier">+ earlier</button>
+              <button class="chip tap" id="allDrinks">all ${allDrinks(state).length - state.settings.hidden.length} drinks</button>
               <button class="chip tap" id="newDrink">+ new drink</button>
             </div>
           </div>
@@ -206,6 +223,17 @@ export function waterTodayView(root: HTMLElement): () => void {
                 : `<p class="line sub">Nothing yet. ${who.name.split(' ')[0]} is ${mood === 'sleepy' ? 'dozing' : 'waiting'}; one glass wakes them.</p>`
             }
           </div>
+          ${
+            kcal
+              ? `<div class="panel"><p class="tag">Calories from drinks<span>${kcal} kcal</span></p>
+                <p class="line sub">${
+                  state.settings.toFuel
+                    ? 'Logged in Fuel as you go.'
+                    : 'Not counted in Fuel. <a class="link" href="#/water/settings">Send them there</a>'
+                }</p></div>`
+              : ''
+          }
+          <div class="panel wl-fact"><p class="tag">Did you know</p><p class="line">${factFor(today())}</p></div>
           ${
             caf.mg
               ? `<div class="panel"><p class="tag">Caffeine<span>${caf.mg} mg</span></p>
@@ -247,14 +275,13 @@ export function waterTodayView(root: HTMLElement): () => void {
     }
     const d = target.closest<HTMLElement>('[data-drink]');
     if (d) {
-      const state = loadWater();
-      drop(state);
-      const { sip, earned } = logSip(d.dataset.drink!, cupOverride ?? undefined);
+      const { text, earned } = pourNow(d.dataset.drink!, cupOverride ?? undefined);
       draw();
       if (earned.length) celebrate(earned);
-      else toast(`${amount(sip.oz, state.settings.unit)} ${drinkById(state, sip.drinkId).name.toLowerCase()}`);
+      else toast(text);
       return;
     }
+    if (target.closest('#allDrinks')) return catalogue(draw);
     const s = target.closest<HTMLElement>('[data-sip]');
     if (s) return sipSheet(s.dataset.sip!, draw);
     if (target.closest('#undo')) {
@@ -270,6 +297,48 @@ export function waterTodayView(root: HTMLElement): () => void {
     root.removeEventListener('click', onClick);
     lastFraction = null;
   };
+}
+
+/** every drink there is, by kind, with a search box: tap to pour */
+function catalogue(done: () => void): void {
+  const state = loadWater();
+  const unit = state.settings.unit;
+  const list = allDrinks(state).filter((d) => !state.settings.hidden.includes(d.id));
+  const kinds = [...new Set(list.map((d) => d.kind ?? 'yours'))];
+  const host = sheet(
+    'All drinks',
+    `<input class="dest" id="drinkSearch" placeholder="search ${list.length} drinks" autocomplete="off">
+     <div id="drinkList">${kinds
+       .map(
+         (k) => `<div class="wl-kind" data-kind="${k}"><p class="tag">${k}</p>${list
+           .filter((d) => (d.kind ?? 'yours') === k)
+           .map(
+             (d) => `<button class="food-row tap wl-cat" data-pour="${d.id}" data-name="${d.name.toLowerCase()}">
+               <span>${glyph(d.glyph, 18)} ${d.name}</span>
+               <span class="mono">${amount(cupFor(state, d.id), unit)} · ×${d.factor}${d.kcalPer8 ? ` · ${Math.round((d.kcalPer8 * cupFor(state, d.id)) / 8)} kcal` : ''}</span>
+             </button>`,
+           )
+           .join('')}</div>`,
+       )
+       .join('')}</div>`,
+  );
+  const search = host.querySelector<HTMLInputElement>('#drinkSearch')!;
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    for (const row of host.querySelectorAll<HTMLElement>('[data-pour]'))
+      row.hidden = !!q && !row.dataset.name!.includes(q);
+    for (const group of host.querySelectorAll<HTMLElement>('.wl-kind'))
+      group.hidden = ![...group.querySelectorAll<HTMLElement>('[data-pour]')].some((r) => !r.hidden);
+  });
+  host.querySelector('#drinkList')!.addEventListener('click', (ev) => {
+    const row = (ev.target as HTMLElement).closest<HTMLElement>('[data-pour]');
+    if (!row) return;
+    const { text, earned } = pourNow(row.dataset.pour!, cupOverride ?? undefined);
+    closeSheet(host);
+    done();
+    if (earned.length) celebrate(earned);
+    else toast(text);
+  });
 }
 
 function customCup(done: () => void): void {
@@ -350,6 +419,7 @@ function drinkSheet(id: string | null, done: () => void): void {
      <label class="field row"><span>Hydration factor</span><input class="num" id="dFactor" inputmode="decimal" value="${drink?.factor ?? 1}"></label>
      <label class="field row"><span>Usual cup (${unit})</span><input class="num" id="dSize" inputmode="decimal" value="${toUnit(drink?.defaultOz ?? 12, unit)}"></label>
      <label class="field row"><span>Caffeine mg per 8 oz</span><input class="num" id="dCaf" inputmode="numeric" value="${drink?.caffeinePer8 ?? 0}"></label>
+     <label class="field row"><span>Calories per 8 oz</span><input class="num" id="dKcal" inputmode="numeric" value="${drink?.kcalPer8 ?? 0}"></label>
      <p class="line sub">1.0 counts every drop as water; 0.5 counts half, as for wine.</p>
      <button class="big tap" id="dSave" data-done="1">SAVE</button>
      ${drink ? '<button class="link tap" id="dDelete" data-done="1">Delete this drink</button>' : ''}`,
@@ -371,6 +441,7 @@ function drinkSheet(id: string | null, done: () => void): void {
       factor: Math.min(1.5, Math.max(0, Number(value('#dFactor')) || 1)),
       defaultOz: fromUnit(Number(value('#dSize')) || 12, unit),
       caffeinePer8: Number(value('#dCaf')) || undefined,
+      kcalPer8: Number(value('#dKcal')) || undefined,
     });
     toast(`${name} added`);
     done();
@@ -414,9 +485,9 @@ function weekChart(state: WaterState): string {
   </figure>`;
 }
 
-function monthHeat(state: WaterState): string {
-  const cells = monthGrid(state);
-  const [y, m] = today().split('-').map(Number);
+function monthHeat(state: WaterState, ym: string): string {
+  const cells = monthGrid(state, ym);
+  const [y, m] = ym.split('-').map(Number);
   const lead = new Date(y, m - 1, 1).getDay();
   const title = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   return `<div class="wl-month" aria-label="${title}">
@@ -432,8 +503,36 @@ function monthHeat(state: WaterState): string {
       })
       .join('')}
   </div>
-  <p class="line sub wl-month-cap">${title} · the deeper the colour, the closer to the goal.</p>`;
+  <p class="line sub wl-month-cap">The deeper the colour, the closer to the goal.</p>`;
 }
+
+/** the month on a card: totals, the best run, a favourite, and a name for it */
+function recapCard(state: WaterState, ym: string): string {
+  const r = recap(state, ym);
+  const unit = state.settings.unit;
+  return `<div class="wl-recap" id="recap">
+    <p class="tag">Your ${new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString('en-US', { month: 'long' })}</p>
+    <b class="wl-identity">${r.identity}</b>
+    <p class="line sub">${r.why}</p>
+    <div class="wl-nums">
+      <div><b class="mono">${amount(r.counted, unit)}</b><span class="tag">counted</span></div>
+      <div><b class="mono">${r.daysMet}/${r.daysLogged}</b><span class="tag">days on goal</span></div>
+      <div><b class="mono">${r.bestStreak}</b><span class="tag">best streak</span></div>
+      <div><b class="mono">${r.drinks}</b><span class="tag">drinks</span></div>
+      <div><b class="mono">${r.favourite ?? '—'}</b><span class="tag">favourite</span></div>
+      <div><b class="mono">${r.bestHour === null ? '—' : hourLabel(r.bestHour)}</b><span class="tag">best hour</span></div>
+    </div>
+  </div>`;
+}
+
+/** which month the stats calendar is showing */
+let shownMonth: string | null = null;
+
+const stepMonth = (ym: string, by: number): string => {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + by, 1);
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}`;
+};
 
 export function waterStatsView(root: HTMLElement): void {
   const state = loadWater();
@@ -442,6 +541,7 @@ export function waterStatsView(root: HTMLElement): void {
   const sips = sipsOn(state);
   const s = summary(state);
   const hours = s.byHour.slice(5, 24);
+  const ym = shownMonth ?? today().slice(0, 7);
   root.innerHTML = shell(
     'stats',
     `<div class="hero">
@@ -459,7 +559,13 @@ export function waterStatsView(root: HTMLElement): void {
         </div>
       </div>
       <div class="panel">${weekChart(state)}</div>
-      <div class="panel"><p class="tag">This month</p>${monthHeat(state)}</div>
+      <div class="panel wl-cal">
+        <p class="tag"><button class="link tap" id="prevMonth" aria-label="Previous month">‹</button>
+          <span>${new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <button class="link tap" id="nextMonth" aria-label="Next month"${ym >= today().slice(0, 7) ? ' disabled' : ''}>›</button></p>
+        ${monthHeat(state, ym)}
+        ${recapCard(state, ym)}
+      </div>
       <div class="panel">
         <p class="tag">Last thirty days<span>${s.logged} days logged</span></p>
         <div class="wl-nums">
@@ -492,6 +598,13 @@ export function waterStatsView(root: HTMLElement): void {
     </div>`,
     'wl-page',
   );
+  const move = (by: number): void => {
+    shownMonth = stepMonth(ym, by);
+    if (shownMonth >= today().slice(0, 7)) shownMonth = null;
+    waterStatsView(root);
+  };
+  root.querySelector('#prevMonth')!.addEventListener('click', () => move(-1));
+  root.querySelector('#nextMonth')!.addEventListener('click', () => move(1));
 }
 
 /* ---------- 99: challenges and achievements ---------- */
@@ -627,7 +740,16 @@ export function waterSettingsView(root: HTMLElement): void {
         <div class="chips" id="unit">${(['oz', 'ml'] as const)
           .map((u) => `<button class="chip tap${unit === u ? ' on' : ''}" data-unit="${u}">${u}</button>`)
           .join('')}</div>
-        <label class="sw tap"><input type="checkbox" id="sound" ${s.sound ? 'checked' : ''}><span>A drop sound when you log</span></label>
+        <label class="sw tap"><input type="checkbox" id="sound" ${s.sound ? 'checked' : ''}><span>A sound when you log</span></label>
+        ${(['chime', 'cheer'] as const)
+          .map(
+            (k) => `<label class="field row"><span>${k === 'chime' ? 'Each drink' : 'Goal met'}</span>
+              <span class="wl-soundpick"><select class="dest wl-size" id="${k}">${CHIMES.map(
+                (c) => `<option value="${c.id}"${s[k] === c.id ? ' selected' : ''}>${c.name}</option>`,
+              ).join('')}</select><button class="link tap" data-hear="${k}" aria-label="Hear it">▶</button></span></label>`,
+          )
+          .join('')}
+        <label class="sw tap"><input type="checkbox" id="toFuel" ${s.toFuel ? 'checked' : ''}><span>Log the calories in drinks in Fuel too</span></label>
         <label class="field"><span class="tag">One tap from Fuel and More pours</span>
           <select class="dest" id="quick">${allDrinks(state)
             .map((d) => `<option value="${d.id}"${d.id === s.quick ? ' selected' : ''}>${d.name}</option>`)
@@ -648,10 +770,36 @@ export function waterSettingsView(root: HTMLElement): void {
         <button class="link tap" id="ics">Add these to my calendar (.ics)</button>
       </div>
       <div class="panel">
-        <p class="tag">Cup for each drink</p>
-        ${allDrinks(state)
-          .map((d) => `<label class="field row wl-drink-row"><span>${glyph(d.glyph, 18)} ${d.name} <i class="muted">×${d.factor}</i></span>${sizeSelect(d)}</label>`)
-          .join('')}
+        <p class="tag">Today grid<span>${s.panel.length} pinned</span></p>
+        <ol class="wl-pinned" id="pinned">${s.panel
+          .map((id) => {
+            const d = drinkById(state, id);
+            return `<li data-pin-row="${id}">${glyph(d.glyph, 18)}<b>${d.name}</b>
+              <button class="link tap" data-shift="-1" aria-label="Move ${d.name} up">↑</button>
+              <button class="link tap" data-shift="1" aria-label="Move ${d.name} down">↓</button>
+              <button class="link tap" data-unpin="${id}" aria-label="Unpin ${d.name}">✕</button></li>`;
+          })
+          .join('')}</ol>
+        <p class="line sub">Pin any drink below with ☆; the grid follows this order.</p>
+      </div>
+      <div class="panel wl-table-panel">
+        <p class="tag">All ${allDrinks(state).length} drinks<span>per usual cup</span></p>
+        <div class="wl-table" id="drinkTable">
+          ${allDrinks(state)
+            .map((d) => {
+              const cup = cupFor(state, d.id);
+              const pinned = s.panel.includes(d.id);
+              const hidden = s.hidden.includes(d.id);
+              const caf = d.caffeinePer8 ? ` · ${Math.round((d.caffeinePer8 * cup) / 8)} mg caffeine` : '';
+              const kcal = ` · ${d.kcalPer8 ? Math.round((d.kcalPer8 * cup) / 8) : 0} kcal`;
+              return `<div class="wl-trow${hidden ? ' off' : ''}">
+                <span class="wl-tname">${glyph(d.glyph, 18)}<span><b>${d.name}</b><small class="mono">×${d.factor}${caf}${kcal}</small></span></span>
+                <span class="wl-tact">${sizeSelect(d)}<button class="link tap" data-pin="${d.id}" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${d.name}">${pinned ? '★' : '☆'}</button><button class="link tap" data-hide="${d.id}" aria-pressed="${hidden}" aria-label="${hidden ? 'Show' : 'Hide'} ${d.name}">${hidden ? 'show' : 'hide'}</button></span>
+              </div>`;
+            })
+            .join('')}
+        </div>
+        <p class="line sub">Factor is how much counts as water. Hidden drinks stay out of the full list.</p>
       </div>
       <div class="panel">
         <p class="tag">My drinks<span><button class="link tap" id="add">add</button></span></p>
@@ -691,6 +839,53 @@ export function waterSettingsView(root: HTMLElement): void {
     again();
   });
   input('#sound').addEventListener('change', () => setWaterSettings({ sound: input('#sound').checked }));
+  input('#toFuel').addEventListener('change', () => setWaterSettings({ toFuel: input('#toFuel').checked }));
+  for (const k of ['chime', 'cheer'] as const)
+    root.querySelector(`#${k}`)!.addEventListener('change', (ev) => {
+      const id = (ev.target as HTMLSelectElement).value;
+      setWaterSettings({ [k]: id });
+      chime(id);
+    });
+  root.querySelector('.wl-cols')!.addEventListener('click', (ev) => {
+    const target = ev.target as HTMLElement;
+    const hear = target.closest<HTMLElement>('[data-hear]');
+    if (hear) return chime(loadWater().settings[hear.dataset.hear as 'chime' | 'cheer']);
+    const pin = target.closest<HTMLElement>('[data-pin]');
+    const settings = loadWater().settings;
+    if (pin) {
+      const id = pin.dataset.pin!;
+      setWaterSettings({
+        panel: settings.panel.includes(id) ? settings.panel.filter((x) => x !== id) : [...settings.panel, id],
+        hidden: settings.hidden.filter((x) => x !== id),
+      });
+      return again();
+    }
+    const unpin = target.closest<HTMLElement>('[data-unpin]');
+    if (unpin) {
+      setWaterSettings({ panel: settings.panel.filter((x) => x !== unpin.dataset.unpin) });
+      return again();
+    }
+    const hide = target.closest<HTMLElement>('[data-hide]');
+    if (hide) {
+      const id = hide.dataset.hide!;
+      const hidden = settings.hidden.includes(id) ? settings.hidden.filter((x) => x !== id) : [...settings.hidden, id];
+      setWaterSettings({ hidden, panel: settings.panel.filter((x) => !hidden.includes(x)) });
+      return again();
+    }
+    const shift = target.closest<HTMLElement>('[data-shift]');
+    if (shift) {
+      const id = shift.closest<HTMLElement>('[data-pin-row]')!.dataset.pinRow!;
+      const list = [...settings.panel];
+      const at = list.indexOf(id);
+      const to = at + Number(shift.dataset.shift);
+      if (to < 0 || to >= list.length) return;
+      list.splice(at, 1);
+      list.splice(to, 0, id);
+      setWaterSettings({ panel: list });
+      again();
+      root.querySelector<HTMLElement>(`[data-pin-row="${id}"] [data-shift="${shift.dataset.shift}"]`)?.focus();
+    }
+  });
   root.querySelector('#quick')!.addEventListener('change', (ev) =>
     setWaterSettings({ quick: (ev.target as HTMLSelectElement).value }),
   );

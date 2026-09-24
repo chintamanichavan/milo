@@ -1,17 +1,20 @@
 import { now } from '../clock';
-import { FUEL_KEY, loadFuel, trendWeight } from '../fuel/store';
+import { addEntry, FUEL_KEY, loadFuel, removeEntry, trendWeight, updateEntry, type Meal } from '../fuel/store';
 import { LIFT_KEY } from '../lift/store';
 import { load as loadRun } from '../run/store';
 import { dayKey } from '../ui/time';
+import { FACTS } from './facts';
 import {
   ACHIEVEMENTS,
   CHALLENGES,
   COMPANIONS,
+  DEFAULT_PANEL,
   DRINKS,
   ML_PER_OZ,
   WATER_KEY,
   type ChallengeId,
   type CharacterId,
+  type UnlockKind,
   type Drink,
   type Unit,
 } from './model';
@@ -28,6 +31,8 @@ export interface Sip {
   /** raw volume, in ounces */
   oz: number;
   note?: string;
+  /** the Fuel entry this drink's calories went to, if any */
+  fuelId?: string;
 }
 
 export interface WaterSettings {
@@ -43,6 +48,15 @@ export interface WaterSettings {
   sizes: Record<string, number>;
   /** what one tap on the Fuel card pours */
   quick: string;
+  /** the drinks pinned to the Today grid, in order */
+  panel: string[];
+  /** drinks left out of the full list */
+  hidden: string[];
+  /** the chime on each drink, and the one when the goal is met */
+  chime: string;
+  cheer: string;
+  /** send the calories in drinks over to Fuel's log */
+  toFuel: boolean;
 }
 
 export interface ChallengeRun {
@@ -76,6 +90,11 @@ const defaults = (): WaterSettings => {
     reminders: 8,
     sizes: {},
     quick: 'water',
+    panel: [...DEFAULT_PANEL],
+    hidden: [],
+    chime: 'drop',
+    cheer: 'fanfare',
+    toFuel: false,
   };
 };
 
@@ -154,6 +173,18 @@ export const drinkById = (state: WaterState, id: string): Drink =>
 
 export const cupFor = (state: WaterState, id: string): number =>
   state.settings.sizes[id] ?? drinkById(state, id).defaultOz;
+
+/** the drinks on the Today grid: pinned ones in your order, then your own */
+export function panelDrinks(state: WaterState): Drink[] {
+  const pinned = state.settings.panel
+    .map((id) => allDrinks(state).find((d) => d.id === id))
+    .filter((d): d is Drink => !!d);
+  const customs = state.customs.filter((d) => !state.settings.panel.includes(d.id) && !state.settings.hidden.includes(d.id));
+  return [...pinned, ...customs];
+}
+
+export const kcalOf = (state: WaterState, sip: Pick<Sip, 'drinkId' | 'oz'>): number =>
+  Math.round(((drinkById(state, sip.drinkId).kcalPer8 ?? 0) * sip.oz) / 8);
 
 export function saveCustom(drink: Omit<Drink, 'id' | 'custom'> & { id?: string }): Drink {
   const state = loadWater();
@@ -261,9 +292,33 @@ export function logSip(drinkId: string, oz?: number, at = now(), note?: string):
     oz: oz ?? cupFor(state, drinkId),
     ...(note ? { note } : {}),
   };
+  sendToFuel(state, sip);
   state.sips.push(sip);
   saveWater(state);
   return { sip, earned: award() };
+}
+
+const mealAt = (at: number): Meal => {
+  const h = hourOf(at);
+  return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 21 ? 'dinner' : 'snack';
+};
+
+/** a drink with calories, logged in Fuel too when you have asked for that */
+function sendToFuel(state: WaterState, sip: Sip): void {
+  const kcal = kcalOf(state, sip);
+  if (!state.settings.toFuel || kcal <= 0) return;
+  const drink = drinkById(state, sip.drinkId);
+  sip.fuelId = addEntry({
+    date: dayOf(sip.at),
+    meal: mealAt(sip.at),
+    foodId: `water-${drink.id}`,
+    name: `${drink.name} (${Math.round(sip.oz * 10) / 10} oz)`,
+    grams: Math.round(sip.oz * 29.57),
+    kcal,
+    protein: 0,
+    carbs: Math.round(kcal / 4),
+    fat: 0,
+  });
 }
 
 /** takes back the last thing logged, whenever it was drunk */
@@ -272,22 +327,37 @@ export function undoLast(): Sip | null {
   if (!state.sips.length) return null;
   const last = state.sips.reduce((a, b) => (b.made > a.made ? b : a));
   state.sips = state.sips.filter((s) => s.id !== last.id);
+  if (last.fuelId) removeEntry(last.fuelId);
   saveWater(state);
   return last;
 }
 
 export function updateSip(id: string, patch: Partial<Sip>): void {
   const state = loadWater();
-  state.sips = state.sips.map((s) => (s.id === id ? { ...s, ...patch } : s));
+  state.sips = state.sips.map((s) => {
+    if (s.id !== id) return s;
+    const next = { ...s, ...patch };
+    if (next.fuelId) {
+      const kcal = kcalOf(state, next);
+      updateEntry(next.fuelId, { kcal, carbs: Math.round(kcal / 4), date: dayOf(next.at), meal: mealAt(next.at) });
+    }
+    return next;
+  });
   saveWater(state);
   award();
 }
 
 export function deleteSip(id: string): void {
   const state = loadWater();
+  const gone = state.sips.find((s) => s.id === id);
+  if (gone?.fuelId) removeEntry(gone.fuelId);
   state.sips = state.sips.filter((s) => s.id !== id);
   saveWater(state);
 }
+
+/** the calories in a day's drinks */
+export const drinkKcal = (state: WaterState, date = today()): number =>
+  sipsOn(state, date).reduce((sum, s) => sum + kcalOf(state, s), 0);
 
 /* ---------- streaks ---------- */
 
@@ -350,38 +420,73 @@ export function challengeStatus(state: WaterState, id: ChallengeId): ChallengeSt
   let progress = 0;
   let broken = false;
 
-  if (id === 'week' || id === 'month') {
-    for (let date = run.started; date <= key; date = shiftDay(date, 1)) {
-      if (metOn(state, date)) progress++;
-      else if (date !== key) progress = 0;
-    }
-  } else if (id === 'nosoda') {
-    for (let date = run.started; date <= key; date = shiftDay(date, 1)) {
-      if (sipsOn(state, date).some((s) => s.drinkId === 'soda')) {
+  const days = (): string[] => {
+    const out: string[] = [];
+    for (let date = run.started; date <= key; date = shiftDay(date, 1)) out.push(date);
+    return out;
+  };
+  const weekend = (date: string): boolean => {
+    const [y, m, d] = date.split('-').map(Number);
+    const day = new Date(y, m - 1, d).getDay();
+    return day === 0 || day === 6;
+  };
+  const ALCOHOL = new Set(allDrinks(state).filter((d) => d.kind === 'alcohol').map((d) => d.id));
+  const caffeinated = (s: Sip): boolean => (drinkById(state, s.drinkId).caffeinePer8 ?? 0) > 5;
+  /** a clean-days challenge: breaks on the first slip, counts finished days */
+  const clean = (slip: (s: Sip) => boolean): void => {
+    for (const date of days()) {
+      if (sipsOn(state, date).some(slip)) {
         broken = true;
         break;
       }
       if (date < key) progress++;
     }
-  } else if (id === 'morning') {
-    for (let date = run.started; date <= key; date = shiftDay(date, 1))
-      if (sipsOn(state, date).some((s) => (s.drinkId === 'water' || s.drinkId === 'sparkling') && hourOf(s.at) < 10))
-        progress++;
-  } else if (id === 'runday') {
-    for (let date = run.started; date <= key; date = shiftDay(date, 1)) {
-      if (!activeOn(date)) continue;
-      if (metOn(state, date)) progress++;
+  };
+  /** a days-in-a-row challenge: a missed day before today starts it over */
+  const straight = (counts: (date: string) => boolean, skip: (date: string) => boolean = () => false): void => {
+    for (const date of days()) {
+      if (skip(date)) continue;
+      if (counts(date)) progress++;
       else if (date !== key) progress = 0;
     }
-  }
+  };
+  const tally = (counts: (date: string) => boolean): void => {
+    for (const date of days()) if (counts(date)) progress++;
+  };
+
+  if (id === 'week' || id === 'fortnight' || id === 'month') straight((d) => metOn(state, d));
+  else if (id === 'nosoda') clean((s) => s.drinkId === 'soda' || s.drinkId === 'diet-soda');
+  else if (id === 'nobooze') clean((s) => ALCOHOL.has(s.drinkId));
+  else if (id === 'nolate') clean((s) => caffeinated(s) && hourOf(s.at) >= 14);
+  else if (id === 'morning')
+    tally((d) => sipsOn(state, d).some((s) => (s.drinkId === 'water' || s.drinkId === 'sparkling') && hourOf(s.at) < 10));
+  else if (id === 'tea') tally((d) => sipsOn(state, d).some((s) => /tea|matcha|chai|mate/.test(s.drinkId)));
+  else if (id === 'early') tally((d) => reachedBy(state, d, 20));
+  else if (id === 'variety') {
+    const since = new Set<string>();
+    for (const date of days()) for (const s of sipsOn(state, date)) since.add(s.drinkId);
+    progress = since.size;
+  } else if (id === 'weekend') tally((d) => weekend(d) && metOn(state, d));
+  else if (id === 'runday') straight((d) => metOn(state, d), (d) => !activeOn(d));
   progress = Math.min(def.target, progress);
-  if (broken) return { state: 'broken', progress, target: def.target, note: 'A soda slipped in. Start it again?' };
+  if (broken) return { state: 'broken', progress, target: def.target, note: 'One slipped in. Start it again?' };
   return {
     state: 'active',
     progress,
     target: def.target,
-    note: `${progress} of ${def.target}${id === 'runday' ? ' run days' : ' days'}`,
+    note: `${progress} of ${def.target}${id === 'runday' ? ' run days' : id === 'variety' ? ' drinks' : ' days'}`,
   };
+}
+
+/** had the goal been met by this hour of the day? */
+function reachedBy(state: WaterState, date: string, hour: number): boolean {
+  const goal = goalOn(state, date);
+  let total = 0;
+  for (const s of sipsOn(state, date)) {
+    if (hourOf(s.at) >= hour) break;
+    total += s.oz * drinkById(state, s.drinkId).factor;
+  }
+  return goal > 0 && total >= goal - 0.05;
 }
 
 export function startChallenge(id: ChallengeId): void {
@@ -441,24 +546,36 @@ export function award(): string[] {
   };
   for (const a of ACHIEVEMENTS) if (has[a.id]) give(a.id, a.name);
 
-  const unlocks: Record<CharacterId, boolean> = {
-    llama: true,
-    cat: met >= 1,
-    dog: best >= 3,
-    fox: best >= 7,
-    penguin: drinks >= 50,
-    otter: finished,
-    capybara: best >= 14,
-    sloth: met >= 30,
-  };
-  for (const c of COMPANIONS)
-    if (c.id !== 'llama' && unlocks[c.id]) give(`pet-${c.id}`, `${c.name.split(' ')[0]} joined you`);
+  const counts = progressCounts(state, best);
+  for (const c of COMPANIONS) {
+    const [kind, n] = c.unlock;
+    if (kind !== 'start' && counts[kind] >= n) give(`pet-${c.id}`, `${c.name.split(' ')[0]} joined you`);
+  }
 
   saveWater(state);
   return earnedNow;
 }
 
 export const unlocked = (state: WaterState, id: CharacterId): boolean => id === 'llama' || !!state.earned[`pet-${id}`];
+
+/** everything a companion can be waiting for, counted */
+export function progressCounts(state: WaterState, best = bestStreak(state)): Record<Exclude<UnlockKind, 'start'>, number> {
+  const days = [...new Set(state.sips.map((s) => dayOf(s.at)))];
+  const metDays = days.filter((d) => metOn(state, d));
+  return {
+    met: metDays.length,
+    streak: Math.max(best, streak(state)),
+    drinks: state.sips.length,
+    challenges: CHALLENGES.filter((c) => state.challenges[c.id]?.done).length,
+    variety: new Set(state.sips.map((s) => s.drinkId)).size,
+    mornings: days.filter((d) => sipsOn(state, d).some((s) => hourOf(s.at) < 9)).length,
+    weekends: metDays.filter((d) => {
+      const [y, m, dd] = d.split('-').map(Number);
+      const w = new Date(y, m - 1, dd).getDay();
+      return w === 0 || w === 6;
+    }).length,
+  };
+}
 
 /* ---------- reminders ---------- */
 
@@ -508,10 +625,12 @@ export function remindersIcs(state: WaterState): string {
       `DTEND:${stamp(new Date(start.getTime() + 5 * 60_000))}`,
       'RRULE:FREQ=DAILY;COUNT=60',
       'SUMMARY:A glass of water',
+      // a different small fact on every reminder
+      `DESCRIPTION:${FACTS[i % FACTS.length].replace(/,/g, '\\,')}`,
       'BEGIN:VALARM',
       'TRIGGER:PT0M',
       'ACTION:DISPLAY',
-      'DESCRIPTION:A glass of water',
+      `DESCRIPTION:A glass of water. ${FACTS[i % FACTS.length].replace(/,/g, '\\,')}`,
       'END:VALARM',
       'END:VEVENT',
     ].join('\r\n');
@@ -569,14 +688,97 @@ export function weekBars(state: WaterState): { date: string; effective: number; 
   });
 }
 
-export function monthGrid(state: WaterState): { date: string; ratio: number | null }[] {
-  const [y, m] = today().split('-').map(Number);
+/** a month's calendar; ym is "2026-09", this month if left out */
+export function monthGrid(state: WaterState, ym = today().slice(0, 7)): { date: string; ratio: number | null }[] {
+  const [y, m] = ym.split('-').map(Number);
   const days = new Date(y, m, 0).getDate();
   return Array.from({ length: days }, (_, i) => {
     const date = dayKey(new Date(y, m - 1, i + 1, 12));
     const sips = sipsOn(state, date);
     return { date, ratio: sips.length ? effectiveOf(state, sips) / Math.max(1, goalOn(state, date)) : null };
   });
+}
+
+export interface Recap {
+  ym: string;
+  counted: number;
+  poured: number;
+  drinks: number;
+  daysMet: number;
+  daysLogged: number;
+  bestStreak: number;
+  favourite: string | null;
+  bestHour: number | null;
+  /** a name for the month, from how you drank */
+  identity: string;
+  why: string;
+}
+
+/** a month in one card: what you drank, and what kind of drinker it made you */
+export function recap(state: WaterState, ym = today().slice(0, 7)): Recap {
+  const sips = state.sips.filter((s) => dayOf(s.at).startsWith(ym));
+  const grid = monthGrid(state, ym).filter((c) => c.date <= today());
+  let run = 0;
+  let best = 0;
+  for (const c of grid) {
+    run = c.ratio !== null && c.ratio >= 1 - 1e-3 ? run + 1 : 0;
+    best = Math.max(best, run);
+  }
+  const byDrink = new Map<string, number>();
+  const byHour = Array.from({ length: 24 }, () => 0);
+  for (const s of sips) {
+    byDrink.set(s.drinkId, (byDrink.get(s.drinkId) ?? 0) + s.oz);
+    byHour[hourOf(s.at)] += s.oz;
+  }
+  const favouriteId = [...byDrink.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const top = Math.max(...byHour);
+  const bestHour = top > 0 ? byHour.indexOf(top) : null;
+  const daysLogged = grid.filter((c) => c.ratio !== null).length;
+  const daysMet = grid.filter((c) => c.ratio !== null && c.ratio >= 1 - 1e-3).length;
+  const morning = sips.filter((s) => hourOf(s.at) < 11).reduce((sum, s) => sum + s.oz, 0);
+  const poured = rawOf(sips);
+  const counted = effectiveOf(state, sips);
+  const kinds = new Set(sips.map((s) => drinkById(state, s.drinkId).kind ?? 'water'));
+  const water = sips.filter((s) => (drinkById(state, s.drinkId).kind ?? 'water') === 'water').reduce((sum, s) => sum + s.oz, 0);
+  const favouriteKind = favouriteId ? drinkById(state, favouriteId).kind : undefined;
+
+  let identity = 'Getting started';
+  let why = 'A few drinks logged; next month has room for more.';
+  if (daysLogged >= 5 && daysMet / daysLogged >= 0.8) {
+    identity = 'The Reservoir';
+    why = `Goal met on ${daysMet} of ${daysLogged} logged days.`;
+  } else if (best >= 7) {
+    identity = 'Steady Stream';
+    why = `A ${best}-day run of meeting the goal.`;
+  } else if (poured > 0 && morning / poured >= 0.45) {
+    identity = 'Early Riser';
+    why = 'Almost half of it before 11 AM.';
+  } else if (favouriteKind === 'tea & coffee') {
+    identity = 'Brew Devotee';
+    why = `${drinkById(state, favouriteId!).name} led the month.`;
+  } else if (kinds.size >= 4) {
+    identity = 'The Sampler';
+    why = `${new Set(sips.map((s) => s.drinkId)).size} different drinks.`;
+  } else if (poured > 0 && water / poured >= 0.8) {
+    identity = 'Purist';
+    why = 'Four fifths of it plain water.';
+  } else if (daysLogged > 0) {
+    identity = 'Finding the Flow';
+    why = `${daysLogged} days logged, ${daysMet} on goal.`;
+  }
+  return {
+    ym,
+    counted,
+    poured,
+    drinks: sips.length,
+    daysMet,
+    daysLogged,
+    bestStreak: best,
+    favourite: favouriteId ? drinkById(state, favouriteId).name : null,
+    bestHour,
+    identity,
+    why,
+  };
 }
 
 export interface Summary {

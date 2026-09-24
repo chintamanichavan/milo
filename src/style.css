@@ -3684,3 +3684,156 @@ select.wl-size {
   min-height: 44px;
   accent-color: var(--run);
 }
+
+/* ---------- water: the full drinks list, recap, facts ---------- */
+
+.wl-kind > .tag {
+  margin: calc(var(--u) * 2) 0 4px;
+}
+
+.wl-cat {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-cat span:first-child {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.wl-cat svg,
+.wl-trow svg,
+.wl-pinned svg {
+  color: var(--run);
+}
+
+.wl-table {
+  display: grid;
+  max-height: 520px;
+  overflow-y: auto;
+  font-size: var(--t12);
+}
+
+.wl-trow {
+  display: grid;
+  min-height: 52px;
+  gap: var(--u);
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  border-top: 1px solid var(--line);
+}
+
+.wl-trow.off {
+  opacity: 0.5;
+}
+
+.wl-tname {
+  display: flex;
+  gap: var(--u);
+  align-items: center;
+}
+
+.wl-tname b {
+  display: block;
+  font: 500 var(--t14) / 1.2 var(--sans);
+}
+
+.wl-tname small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.wl-trow select.wl-size {
+  width: 84px;
+  min-height: 36px;
+  padding: 0 4px;
+  font-size: var(--t12);
+}
+
+.wl-tact {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.wl-tact .link,
+.wl-pinned .link {
+  min-width: 32px;
+  min-height: 36px;
+}
+
+.wl-pinned {
+  display: grid;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+
+.wl-pinned li {
+  display: grid;
+  gap: var(--u);
+  grid-template-columns: 20px 1fr 36px 36px 36px;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.wl-pinned b {
+  font: 500 var(--t14) / 1 var(--sans);
+}
+
+.wl-soundpick {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.wl-cal > .tag {
+  align-items: center;
+}
+
+.wl-cal > .tag .link {
+  min-width: 44px;
+  min-height: 36px;
+  font-size: var(--t17);
+}
+
+.wl-cal > .tag .link:disabled {
+  opacity: 0.3;
+}
+
+.wl-recap {
+  display: grid;
+  margin-top: calc(var(--u) * 2);
+  padding: calc(var(--u) * 2);
+  gap: var(--u);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--run) 9%, var(--panel));
+}
+
+.wl-identity {
+  color: var(--run);
+  font: 700 var(--t22) / 1.1 var(--sans);
+}
+
+.wl-recap .wl-nums {
+  row-gap: calc(var(--u) * 1.5);
+}
+
+.wl-recap .wl-nums b {
+  overflow: hidden;
+  font-size: var(--t14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-fact .line {
+  font-size: var(--t14);
+}

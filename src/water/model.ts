@@ -25,7 +25,12 @@ export type GlyphId =
   | 'flask'
   | 'drop'
   | 'leaf'
-  | 'star';
+  | 'star'
+  | 'shot'
+  | 'cocktail'
+  | 'boba';
+
+export type DrinkKind = 'water' | 'tea & coffee' | 'milk' | 'juice & soda' | 'alcohol' | 'food & other';
 
 export interface Drink {
   id: string;
@@ -37,24 +42,13 @@ export interface Drink {
   defaultOz: number;
   /** a rough caffeine estimate, per 8 oz */
   caffeinePer8?: number;
+  /** a rough energy estimate, per 8 oz */
+  kcalPer8?: number;
+  kind?: DrinkKind;
   custom?: boolean;
 }
 
-export const DRINKS: Drink[] = [
-  { id: 'water', name: 'Water', factor: 1, glyph: 'glass', defaultOz: 8 },
-  { id: 'sparkling', name: 'Sparkling', factor: 1, glyph: 'bubbles', defaultOz: 12 },
-  { id: 'electrolytes', name: 'Electrolytes', factor: 1, glyph: 'bolt', defaultOz: 16 },
-  { id: 'tea', name: 'Tea', factor: 0.9, glyph: 'cup', defaultOz: 8, caffeinePer8: 47 },
-  { id: 'coffee', name: 'Coffee', factor: 0.8, glyph: 'mug', defaultOz: 12, caffeinePer8: 95 },
-  { id: 'milk', name: 'Milk', factor: 0.9, glyph: 'carton', defaultOz: 8 },
-  { id: 'juice', name: 'Juice', factor: 0.8, glyph: 'straw', defaultOz: 8 },
-  { id: 'soda', name: 'Soda', factor: 0.7, glyph: 'can', defaultOz: 12, caffeinePer8: 23 },
-  { id: 'beer', name: 'Beer', factor: 0.6, glyph: 'pint', defaultOz: 12 },
-  { id: 'wine', name: 'Wine', factor: 0.5, glyph: 'wine', defaultOz: 5 },
-  { id: 'smoothie', name: 'Smoothie', factor: 0.8, glyph: 'blender', defaultOz: 12 },
-  { id: 'coconut', name: 'Coconut water', factor: 1, glyph: 'coconut', defaultOz: 12 },
-  { id: 'soup', name: 'Soup', factor: 0.8, glyph: 'bowl', defaultOz: 12 },
-];
+export { DRINKS, DEFAULT_PANEL } from './drinks';
 
 export const CUPS_OZ = [4, 8, 12, 16, 20, 24, 32];
 
@@ -97,54 +91,115 @@ const GLYPHS: Record<GlyphId, string> = {
   drop: '<path d="M12 3.5c3.5 4.4 6 7.8 6 10.9a6 6 0 0 1-12 0c0-3.1 2.5-6.5 6-10.9z"/>',
   leaf: '<path d="M5 19C5 10 10.5 5 19.5 4.5 19 13.5 14 19 5 19z"/><path d="M5 19l8-8"/>',
   star: '<path d="M12 3.5l2.5 5.3 5.7.7-4.2 4 1.1 5.7L12 16.4l-5.1 2.8L8 13.5l-4.2-4 5.7-.7z"/>',
+  shot: '<path d="M6.5 9h9v4.5a4.5 4.5 0 0 1-9 0z"/><path d="M15.5 10.5h1a1.8 1.8 0 0 1 0 3.6h-1.2"/><path d="M4.5 19.5h13"/><path d="M9.5 6.5c0-1 .8-1.2.8-2.2"/>',
+  cocktail: '<path d="M4.5 4.5h15L12 12.5z"/><path d="M12 12.5v7.5M8.5 20.5h7"/><path d="M15 3l2.5 4"/><circle cx="16.8" cy="7.6" r="1.2"/>',
+  boba: '<path d="M6.5 8h11l-1.4 12a1.4 1.4 0 0 1-1.4 1.2H9.3a1.4 1.4 0 0 1-1.4-1.2z"/><path d="M5.5 8h13M13 8l1.5-5"/><circle cx="10" cy="18" r=".9"/><circle cx="12.5" cy="17" r=".9"/><circle cx="14" cy="19" r=".9"/>',
 };
 
 export const glyph = (id: GlyphId, size = 24): string => G(GLYPHS[id] ?? GLYPHS.glass, size);
 
 /* ---------- companions ---------- */
 
-export type CharacterId = 'llama' | 'cat' | 'dog' | 'fox' | 'penguin' | 'otter' | 'capybara' | 'sloth';
+export type CharacterId =
+  | 'llama'
+  | 'cat'
+  | 'dog'
+  | 'fox'
+  | 'penguin'
+  | 'otter'
+  | 'capybara'
+  | 'sloth'
+  | 'bunny'
+  | 'bear'
+  | 'frog'
+  | 'owl'
+  | 'duck'
+  | 'turtle'
+  | 'whale'
+  | 'hedgehog'
+  | 'koala'
+  | 'panda'
+  | 'seal'
+  | 'axolotl'
+  | 'hippo'
+  | 'elephant'
+  | 'mouse'
+  | 'octopus';
+
+/** what a companion waits for: a count of something, reaching n */
+export type UnlockKind = 'start' | 'met' | 'streak' | 'drinks' | 'challenges' | 'variety' | 'mornings' | 'weekends';
 
 export interface Companion {
   id: CharacterId;
   name: string;
   /** how it is earned, in plain words */
   how: string;
+  unlock: [UnlockKind, number];
 }
 
 export const COMPANIONS: Companion[] = [
-  { id: 'llama', name: 'Lemon the llama', how: 'With you from the first sip.' },
-  { id: 'cat', name: 'Pip the cat', how: 'Meet your goal once.' },
-  { id: 'dog', name: 'Biscuit the dog', how: 'Meet your goal three days running.' },
-  { id: 'fox', name: 'Ember the fox', how: 'Keep a seven-day streak.' },
-  { id: 'penguin', name: 'Pebble the penguin', how: 'Log fifty drinks.' },
-  { id: 'otter', name: 'Ripple the otter', how: 'Finish any challenge.' },
-  { id: 'capybara', name: 'Mango the capybara', how: 'Keep a fourteen-day streak.' },
-  { id: 'sloth', name: 'Moss the sloth', how: 'Meet your goal on thirty days.' },
+  { id: 'llama', name: 'Lemon the llama', how: 'With you from the first sip.', unlock: ['start', 0] },
+  { id: 'cat', name: 'Pip the cat', how: 'Meet your goal once.', unlock: ['met', 1] },
+  { id: 'dog', name: 'Biscuit the dog', how: 'Meet your goal three days running.', unlock: ['streak', 3] },
+  { id: 'bunny', name: 'Clover the bunny', how: 'Meet your goal on five days.', unlock: ['met', 5] },
+  { id: 'fox', name: 'Ember the fox', how: 'Keep a seven-day streak.', unlock: ['streak', 7] },
+  { id: 'penguin', name: 'Pebble the penguin', how: 'Log fifty drinks.', unlock: ['drinks', 50] },
+  { id: 'otter', name: 'Ripple the otter', how: 'Finish any challenge.', unlock: ['challenges', 1] },
+  { id: 'owl', name: 'Hazel the owl', how: 'A drink before 9 AM on ten mornings.', unlock: ['mornings', 10] },
+  { id: 'frog', name: 'Fern the frog', how: 'Try ten different drinks.', unlock: ['variety', 10] },
+  { id: 'bear', name: 'Bramble the bear', how: 'Log a hundred drinks.', unlock: ['drinks', 100] },
+  { id: 'capybara', name: 'Mango the capybara', how: 'Keep a fourteen-day streak.', unlock: ['streak', 14] },
+  { id: 'seal', name: 'Nimbus the seal', how: 'Meet your goal on eight weekend days.', unlock: ['weekends', 8] },
+  { id: 'duck', name: 'Puddle the duck', how: 'Keep a twenty-one-day streak.', unlock: ['streak', 21] },
+  { id: 'sloth', name: 'Moss the sloth', how: 'Meet your goal on thirty days.', unlock: ['met', 30] },
+  { id: 'hedgehog', name: 'Thistle the hedgehog', how: 'Finish three challenges.', unlock: ['challenges', 3] },
+  { id: 'whale', name: 'Tide the whale', how: 'Log two hundred drinks.', unlock: ['drinks', 200] },
+  { id: 'panda', name: 'Bao the panda', how: 'Keep a thirty-day streak.', unlock: ['streak', 30] },
+  { id: 'turtle', name: 'Shelby the turtle', how: 'Meet your goal on forty-five days.', unlock: ['met', 45] },
+  { id: 'koala', name: 'Gum the koala', how: 'Meet your goal on sixty days.', unlock: ['met', 60] },
+  { id: 'axolotl', name: 'Coral the axolotl', how: 'Try twenty different drinks.', unlock: ['variety', 20] },
+  { id: 'mouse', name: 'Crumb the mouse', how: 'Finish six challenges.', unlock: ['challenges', 6] },
+  { id: 'hippo', name: 'Lotus the hippo', how: 'Log five hundred drinks.', unlock: ['drinks', 500] },
+  { id: 'octopus', name: 'Inky the octopus', how: 'Keep a sixty-day streak.', unlock: ['streak', 60] },
+  { id: 'elephant', name: 'Juniper the elephant', how: 'Meet your goal on a hundred days.', unlock: ['met', 100] },
 ];
 
 /* ---------- challenges ---------- */
 
-export type ChallengeId = 'week' | 'month' | 'nosoda' | 'morning' | 'runday';
+export type ChallengeId =
+  | 'week'
+  | 'fortnight'
+  | 'month'
+  | 'nosoda'
+  | 'nobooze'
+  | 'nolate'
+  | 'morning'
+  | 'tea'
+  | 'early'
+  | 'variety'
+  | 'weekend'
+  | 'runday';
 
 export interface Challenge {
   id: ChallengeId;
   name: string;
   blurb: string;
-  /** days it runs for, and what it takes to finish */
+  /** what it takes to finish */
   target: number;
 }
 
 export const CHALLENGES: Challenge[] = [
   { id: 'week', name: 'Seven straight', blurb: 'Meet your goal seven days in a row.', target: 7 },
+  { id: 'fortnight', name: 'Fourteen straight', blurb: 'Meet your goal fourteen days in a row.', target: 14 },
   { id: 'month', name: 'Thirty straight', blurb: 'Meet your goal thirty days in a row.', target: 30 },
   { id: 'nosoda', name: 'No-soda week', blurb: 'Seven days without a single soda.', target: 7 },
-  {
-    id: 'morning',
-    name: 'Morning glass',
-    blurb: 'A glass of water before 10 AM on five days.',
-    target: 5,
-  },
+  { id: 'nobooze', name: 'Dry week', blurb: 'Seven days without beer, wine, cider or spirits.', target: 7 },
+  { id: 'nolate', name: 'Calm evenings', blurb: 'Seven days with no caffeine after 2 PM.', target: 7 },
+  { id: 'morning', name: 'Morning glass', blurb: 'A glass of water before 10 AM on five days.', target: 5 },
+  { id: 'tea', name: 'Tea time', blurb: 'A cup of tea on five days.', target: 5 },
+  { id: 'early', name: 'Early finish', blurb: 'Reach your goal before 8 PM on five days.', target: 5 },
+  { id: 'variety', name: 'Tasting flight', blurb: 'Seven different drinks while it runs.', target: 7 },
+  { id: 'weekend', name: 'Weekend water', blurb: 'Meet your goal on four weekend days.', target: 4 },
   {
     id: 'runday',
     name: 'Run-day water',

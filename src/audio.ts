@@ -34,17 +34,24 @@ const PATTERNS: Record<string, Note[]> = {
 
 /** @param always play even with the run's beeps turned off, for sounds with their own switch */
 export function beep(pattern: keyof typeof PATTERNS, always = false): void {
+  playNotes(PATTERNS[pattern], always);
+}
+
+export type { Note };
+
+/** any little tune, as [frequency, start ms, length ms, gain] notes */
+export function playNotes(notes: Note[], always = false, wave: OscillatorType = 'sine'): void {
   if (!ctx || (!always && !load().settings.beep)) return;
   const t0 = ctx.currentTime + 0.02;
   // the cue volume scales the beeps too; the music is the phone's business
   const level = Math.max(0.02, load().settings.voiceVolume ?? 1);
-  for (const [freq, startMs, lenMs, peak = 0.28] of PATTERNS[pattern]) {
+  for (const [freq, startMs, lenMs, peak = 0.28] of notes) {
     const gainTo = Math.max(0.0002, peak * level);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const start = t0 + startMs / 1000;
     const end = start + lenMs / 1000;
-    osc.type = 'sine';
+    osc.type = wave;
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(gainTo, start + 0.02);

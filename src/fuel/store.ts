@@ -123,10 +123,12 @@ export function microsOn(state: FuelState, date = dayKey()): number[] {
   return out;
 }
 
-export function addEntry(entry: Omit<Entry, 'id'>): void {
+export function addEntry(entry: Omit<Entry, 'id'>): string {
   const state = loadFuel();
-  state.entries.push({ ...entry, id: `e-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+  const id = `e-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  state.entries.push({ ...entry, id });
   saveFuel(state);
+  return id;
 }
 
 export function removeEntry(id: string): void {
