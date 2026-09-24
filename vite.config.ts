@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['apple-touch-icon-v3.png'],
+      includeAssets: ['apple-touch-icon-v4.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,ktx2,wasm}'],
         // the satellite map only works online; the big JPEGs are a fallback for
@@ -36,10 +36,10 @@ export default defineConfig({
         background_color: '#0b0d0f',
         theme_color: '#0b0d0f',
         icons: [
-          { src: '/icon-192-v3.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512-v3.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-maskable-192-v3.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icon-maskable-512-v3.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-192-v4.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512-v4.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-maskable-192-v4.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-maskable-512-v4.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
