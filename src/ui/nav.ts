@@ -56,7 +56,8 @@ export function mountNav(): HTMLElement {
         <a class="card tap" href="#/cook">${ICONS.cook}<b>Cook</b><span class="tag">recipes</span></a>
         <a class="card tap" href="#/habits">${ICONS.habits}<b>Habits</b><span class="tag">daily votes</span></a>
         <a class="card tap" href="#/run/settings">${ICONS.settings}<b>Settings</b><span class="tag">everything else</span></a>
-      </div>`,
+      </div>
+      <p class="muted mono" style="margin-top:16px;font-size:12px">build ${__BUILD__} · <img src="/apple-touch-icon-v2.png" alt="" width="18" height="18" style="vertical-align:middle;border-radius:4px"> icon v2</p>`,
     );
     host.querySelector('.cards')!.addEventListener('click', () => setTimeout(() => host.remove(), 180));
   });
