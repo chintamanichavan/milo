@@ -19,6 +19,12 @@ export default defineConfig({
             options: { cacheName: 'earth-fallback', expiration: { maxEntries: 8 } },
           },
           {
+            // the scanner's engine and English model, fetched once and kept
+            urlPattern: /^https:\/\/(cdn\.jsdelivr\.net\/npm\/(tesseract|@tesseract)|tessdata\.projectnaptha\.com)/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'ocr', expiration: { maxEntries: 12 } },
+          },
+          {
             urlPattern: /\/foods\.json\.gz$/,
             handler: 'CacheFirst',
             options: { cacheName: 'foods', expiration: { maxEntries: 2 } },

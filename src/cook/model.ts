@@ -4,19 +4,26 @@ export interface Ingredient {
   item: string;
   note?: string;
   raw: string;
+  /** a section heading, like "For the sauce" — not something to buy */
+  header?: boolean;
 }
 
 export interface Step {
   text: string;
   /** seconds, picked out of the text */
   timerSec?: number;
+  /** a section heading between steps */
+  header?: boolean;
 }
 
 export interface Recipe {
   id: string;
   title: string;
   description?: string;
+  /** the cover photo */
   photoId?: string;
+  /** every photo, cover included */
+  photoIds?: string[];
   prepMin?: number;
   cookMin?: number;
   servings: number;
@@ -85,10 +92,22 @@ const FRACTIONS: Record<string, number> = {
   '½': 0.5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 0.25, '¾': 0.75, '⅛': 0.125,
 };
 
+/** "For the sauce:" or "## Sauce" — a heading, not a line to parse */
+export const headingOf = (line: string): string | null => {
+  const text = line.trim();
+  const hashed = /^#{1,3}\s+(.+)$/.exec(text);
+  if (hashed) return hashed[1].replace(/:$/, '').trim();
+  if (/^[^\d½⅓⅔¼¾⅛].{0,40}:$/.test(text) && !/^(ingredients|method|steps|directions|instructions)\s*:$/i.test(text))
+    return text.slice(0, -1).trim();
+  return null;
+};
+
 /** "2 cloves garlic, finely chopped" → {qty: 2, unit: clove, item: garlic, note: finely chopped} */
 export function parseIngredient(raw: string): Ingredient {
   const line = raw.trim().replace(/\s+/g, ' ');
   if (!line) return { item: '', raw };
+  const heading = headingOf(line);
+  if (heading) return { item: heading, raw, header: true };
   const [main, ...noteParts] = line.split(',');
   let rest = main.trim();
   let qty: number | undefined;
@@ -131,6 +150,8 @@ const TIME = /(\d+(?:\.\d+)?)\s*(second|sec|minute|min|hour|hr)s?/i;
 
 /** Steps carry their own timer when the text names one. */
 export function parseStep(text: string): Step {
+  const heading = headingOf(text);
+  if (heading) return { text: heading, header: true };
   const match = text.match(TIME);
   if (!match) return { text };
   const value = Number(match[1]);
@@ -149,8 +170,12 @@ export function parseText(text: string): Partial<Recipe> {
   const title = lines[0];
   const body = lines.slice(1);
   const splitAt = body.findIndex((l) => /^(method|steps|directions|instructions)\b/i.test(l));
-  const ingredientLines = splitAt >= 0 ? body.slice(0, splitAt) : body.filter((l) => /^[\d½⅓⅔¼¾⅛]/.test(l));
-  const stepLines = splitAt >= 0 ? body.slice(splitAt + 1) : body.filter((l) => !/^[\d½⅓⅔¼¾⅛]/.test(l));
+  const amount = (l: string): boolean => /^[\d½⅓⅔¼¾⅛]/.test(l);
+  // without a Method heading, a section heading belongs with whatever follows it
+  const isIngredient = (l: string, i: number): boolean =>
+    amount(l) || (!!headingOf(l) && i + 1 < body.length && amount(body[i + 1]));
+  const ingredientLines = splitAt >= 0 ? body.slice(0, splitAt) : body.filter(isIngredient);
+  const stepLines = splitAt >= 0 ? body.slice(splitAt + 1) : body.filter((l, i) => !isIngredient(l, i));
   return {
     title,
     ingredients: ingredientLines
@@ -198,7 +223,7 @@ export function convert(ing: Ingredient, to: 'metric' | 'imperial'): Ingredient 
 }
 
 export const scaleIngredient = (ing: Ingredient, factor: number): Ingredient =>
-  ing.qty ? { ...ing, qty: ing.qty * factor } : ing;
+  ing.qty && !ing.header ? { ...ing, qty: ing.qty * factor } : ing;
 
 export const ingredientLine = (ing: Ingredient): string =>
   [ing.qty ? prettyQty(ing.qty) : '', ing.unit ?? '', ing.item].filter(Boolean).join(' ') +

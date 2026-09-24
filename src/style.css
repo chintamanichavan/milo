@@ -4128,3 +4128,116 @@ canvas[data-sky='dusk'] {
 canvas[data-sky='night'] {
   background: linear-gradient(#02040a, #0b1330);
 }
+
+/* ---------- cook: sections, markdown, photos ---------- */
+
+.steps {
+  padding-left: 0;
+  counter-reset: step;
+  list-style: none;
+}
+
+.steps li:not(.group) {
+  counter-increment: step;
+}
+
+.steps li:not(.group)::before {
+  margin-right: var(--u);
+  color: var(--muted);
+  font: 400 var(--t14) / 1 var(--mono);
+  content: counter(step) '.';
+}
+
+.steps li.group,
+.ings li.group {
+  margin-top: calc(var(--u) * 1.5);
+  color: var(--run);
+  font: 600 var(--t12) / 1.2 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.md p,
+.md ul,
+.md ol {
+  margin-bottom: var(--u);
+}
+
+.md ul,
+.md ol {
+  padding-left: calc(var(--u) * 2.5);
+}
+
+.md-h {
+  margin: calc(var(--u) * 1.5) 0 4px;
+  font: 600 var(--t17) / 1.3 var(--sans);
+}
+
+.gallery {
+  display: flex;
+  gap: var(--u);
+  margin-bottom: calc(var(--u) * 2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gallery-shot {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel) center / cover no-repeat;
+  cursor: pointer;
+}
+
+.gallery.edit .gallery-shot {
+  width: 104px;
+  height: 104px;
+}
+
+.gallery-shot .link {
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r);
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 11px;
+}
+
+.photo-large {
+  width: 100%;
+  border-radius: var(--r);
+}
+
+.web-search {
+  display: block;
+  margin: 0 0 calc(var(--u) * 2);
+  font-size: var(--t14);
+}
+
+.web-search[hidden] {
+  display: none;
+}
+
+.cookmode .keys {
+  margin-top: var(--u);
+  font-size: var(--t12);
+  text-align: center;
+}
+
+progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--run);
+}
+.sheet:focus { outline: none; }
+
+.ings li.group::before {
+  content: none;
+}

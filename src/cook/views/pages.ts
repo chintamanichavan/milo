@@ -2,7 +2,7 @@ import { miloMark } from '../../badge';
 import { sheet } from '../../ui/sheet';
 import { clock } from '../../ui/time';
 import { toast } from '../../ui/toast';
-import { fromMela, fromPaprikaFile, importFromText, importFromUrl, toMela } from '../import';
+import { fromMelaWithPhotos, fromPaprikaFile, importFromText, importFromUrl, toMelaWithPhotos } from '../import';
 import {
   aisleFor,
   convert,
@@ -14,7 +14,8 @@ import {
   type Recipe,
   type Slot,
 } from '../model';
-import { getPhoto, savePhoto } from '../photos';
+import { md, mdInline } from '../markdown';
+import { getPhoto, getPhotoBlob, putPhoto, savePhoto } from '../photos';
 import {
   addManualItem,
   addToList,
@@ -120,6 +121,7 @@ export function cookHomeView(root: HTMLElement): () => void {
       <p class="tag section">Cook · ${state.recipes.length} recipes</p>
       <h1>What are we<span><i> · </i>making?</span></h1>
       <input class="dest" id="q" placeholder="search titles, ingredients, tags" aria-label="search">
+      <a class="link tap web-search" id="webSearch" hidden target="_blank" rel="noreferrer"></a>
       <div class="chips" id="cats">
         <button class="chip tap on" data-cat="">all</button>
         <button class="chip tap" data-cat="favourites">★ favourites</button>
@@ -143,9 +145,15 @@ export function cookHomeView(root: HTMLElement): () => void {
   );
   draw();
 
+  const web = root.querySelector<HTMLAnchorElement>('#webSearch')!;
   root.querySelector('#q')!.addEventListener('input', (ev) => {
     query = (ev.target as HTMLInputElement).value;
     draw();
+    // and the rest of the internet, one tap away
+    const q = query.trim();
+    web.hidden = !q;
+    web.href = `https://duckduckgo.com/?q=${encodeURIComponent(`${q} recipe`)}`;
+    web.textContent = `Search the web for “${q}” recipes →`;
   });
   root.querySelector('#cats')!.addEventListener('click', (ev) => {
     const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-cat]');
@@ -174,6 +182,7 @@ export function recipeView(root: HTMLElement, id: string): () => void {
     const factor = servings / (recipe.servings || 1);
     root.querySelector('#ings')!.innerHTML = recipe.ingredients
       .map((raw) => {
+        if (raw.header) return `<li class="group">${mdInline(raw.item)}</li>`;
         const scaled = scaleIngredient(raw, factor);
         return `<li>${ingredientLine(units === 'metric' ? convert(scaled, 'metric') : convert(scaled, 'imperial'))}</li>`;
       })
@@ -186,8 +195,15 @@ export function recipeView(root: HTMLElement, id: string): () => void {
     `<div class="hero">
       <p class="tag section"><a class="tap" href="#/cook">← Recipes</a></p>
       <div class="hero-photo" data-photo="${recipe.photoId ?? ''}"></div>
+      ${
+        (recipe.photoIds?.length ?? 0) > 1
+          ? `<div class="gallery" id="gallery">${recipe.photoIds!
+              .map((p) => `<button class="gallery-shot tap" data-photo="${p}" data-view="${p}" aria-label="photo"></button>`)
+              .join('')}</div>`
+          : ''
+      }
       <h1>${recipe.title}</h1>
-      ${recipe.description ? `<p class="line">${recipe.description}</p>` : ''}
+      ${recipe.description ? md(recipe.description) : ''}
       <p class="line sub">${[
         recipe.prepMin ? `${recipe.prepMin} min prep` : '',
         recipe.cookMin ? `${recipe.cookMin} min cooking` : '',
@@ -220,14 +236,15 @@ export function recipeView(root: HTMLElement, id: string): () => void {
     <div class="panel">
       <p class="tag">Method</p>
       <ol class="steps">${recipe.steps
-        .map(
-          (s) =>
-            `<li>${s.text}${s.timerSec ? ` <span class="tag">${clock(s.timerSec)} timer</span>` : ''}</li>`,
+        .map((s) =>
+          s.header
+            ? `<li class="group">${mdInline(s.text)}</li>`
+            : `<li>${mdInline(s.text)}${s.timerSec ? ` <span class="tag">${clock(s.timerSec)} timer</span>` : ''}</li>`,
         )
         .join('')}</ol>
       <a class="big tap" href="#/cook/mode/${recipe.id}">COOK IT</a>
     </div>
-    ${recipe.notes ? `<div class="panel"><p class="tag">Notes</p><p class="line">${recipe.notes}</p></div>` : ''}
+    ${recipe.notes ? `<div class="panel"><p class="tag">Notes</p>${md(recipe.notes)}</div>` : ''}
     ${
       recipe.nutrition
         ? `<div class="panel"><p class="tag">Per serving</p>
@@ -279,13 +296,24 @@ export function recipeView(root: HTMLElement, id: string): () => void {
     saveCook(next);
     recipeView(root, id);
   });
+  root.querySelector('#gallery')?.addEventListener('click', async (ev) => {
+    const shot = (ev.target as HTMLElement).closest<HTMLElement>('[data-view]');
+    if (!shot) return;
+    const url = await getPhoto(shot.dataset.view!);
+    if (url) sheet(recipe.title, `<img class="photo-large" src="${url}" alt="${recipe.title}">`);
+  });
   root.querySelector('#print')!.addEventListener('click', () => window.print());
   root.querySelector('#share')!.addEventListener('click', async () => {
-    const text = toMela(recipe);
+    const text = await toMelaWithPhotos(recipe, getPhotoBlob);
     const file = new File([text], `${recipe.title}.melarecipe`, { type: 'application/json' });
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: recipe.title });
-      return;
+      try {
+        await navigator.share({ files: [file], title: recipe.title });
+        return;
+      } catch (error) {
+        // cancelled is an answer; anything else falls back to a download
+        if ((error as DOMException).name === 'AbortError') return;
+      }
     }
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
@@ -299,28 +327,43 @@ export function recipeView(root: HTMLElement, id: string): () => void {
 
 /* ---------- 44 + 45. add and edit ---------- */
 
+/** a recipe read from a photo, waiting on the edit page to be checked before it is saved */
+let pending: Recipe | null = null;
+
 export function recipeEditView(root: HTMLElement, id?: string): () => void {
   const state = loadCook();
   const recipe = id ? recipeById(state, id) : undefined;
-  const draft: Recipe = recipe ? { ...recipe } : emptyRecipe();
+  const draft: Recipe = recipe ? { ...recipe } : pending ?? emptyRecipe();
+  const reviewing = !recipe && !!pending;
+  pending = null;
+  draft.photoIds = draft.photoIds ?? (draft.photoId ? [draft.photoId] : []);
 
   root.innerHTML = shell(
     id ? '' : 'new',
     `<div class="hero">
-      <p class="tag section">${id ? 'Edit' : 'Add a recipe'}</p>
+      <p class="tag section">${id ? 'Edit' : reviewing ? 'Check what was read' : 'Add a recipe'}</p>
       <input class="dest big-input" id="title" value="${draft.title}" aria-label="title">
       ${
-        id
+        id || reviewing
           ? ''
           : `<div class="chips">
               <button class="chip tap" id="fromUrl">from a link</button>
               <label class="chip tap">from a file<input type="file" id="fromFile" hidden
                 accept=".melarecipe,.melarecipes,.paprikarecipes,application/json"></label>
               <button class="chip tap" id="fromText">paste text</button>
+              <label class="chip tap">scan a page<input type="file" id="scan" hidden accept="image/*" capture="environment"></label>
             </div>`
       }
-      <label class="field"><span class="tag">Photo</span>
-        <input type="file" id="photo" accept="image/*" capture="environment"></label>
+      ${reviewing ? '<p class="line sub">Read from your photo. Fix anything it got wrong, then save.</p>' : ''}
+      <div class="field"><span class="tag">Photos</span>
+        <div class="gallery edit" id="shots">${draft.photoIds!
+          .map(
+            (p) => `<div class="gallery-shot" data-photo="${p}">
+              <button class="link tap" data-cover="${p}">${p === draft.photoId ? 'cover' : 'make cover'}</button>
+              <button class="link tap" data-drop="${p}" aria-label="remove photo">×</button></div>`,
+          )
+          .join('')}</div>
+        <input type="file" id="photo" accept="image/*" multiple></div>
       <label class="field"><span class="tag">Description</span>
         <input class="dest" id="desc" value="${draft.description ?? ''}"></label>
       <div class="field row"><span>Servings</span><input class="num" id="servings" value="${draft.servings}"></div>
@@ -328,16 +371,18 @@ export function recipeEditView(root: HTMLElement, id?: string): () => void {
       <div class="field row"><span>Cook minutes</span><input class="num" id="cook" value="${draft.cookMin ?? ''}"></div>
       <label class="field"><span class="tag">Ingredients — one per line</span>
         <textarea class="dest area" id="ings" rows="8">${draft.ingredients
-          .map((i) => i.raw || ingredientLine(i))
+          .map((i) => (i.header ? `${i.item}:` : i.raw || ingredientLine(i)))
           .join('\n')}</textarea></label>
       <label class="field"><span class="tag">Method — one step per line</span>
-        <textarea class="dest area" id="steps" rows="8">${draft.steps.map((s) => s.text).join('\n')}</textarea></label>
+        <textarea class="dest area" id="steps" rows="8">${draft.steps.map((s) => (s.header ? `${s.text}:` : s.text)).join('\n')}</textarea></label>
+      <p class="line sub">A line ending in a colon, like “For the sauce:”, starts a section. Steps and notes take
+        **bold**, *italic*, # headings and - lists.</p>
       <label class="field"><span class="tag">Categories, comma separated</span>
         <input class="dest" id="cats" value="${draft.categories.join(', ')}"></label>
       <label class="field"><span class="tag">Tags</span>
         <input class="dest" id="tags" value="${draft.tags.join(', ')}"></label>
       <label class="field"><span class="tag">Notes</span>
-        <input class="dest" id="notes" value="${draft.notes ?? ''}"></label>
+        <textarea class="dest area" id="notes" rows="4">${draft.notes ?? ''}</textarea></label>
       <div class="row-actions">
         <button class="big tap" id="save">SAVE</button>
         ${id ? '<button class="link tap" id="delete">Delete this recipe</button>' : ''}
@@ -370,11 +415,64 @@ export function recipeEditView(root: HTMLElement, id?: string): () => void {
     deleteRecipe(draft.id);
     location.hash = '#/cook';
   });
+  const paintShots = (): void => {
+    root.querySelector('#shots')!.innerHTML = draft.photoIds!
+      .map(
+        (p) => `<div class="gallery-shot" data-photo="${p}">
+          <button class="link tap" data-cover="${p}">${p === draft.photoId ? 'cover' : 'make cover'}</button>
+          <button class="link tap" data-drop="${p}" aria-label="remove photo">×</button></div>`,
+      )
+      .join('');
+    void paintThumbs(root);
+  };
+  void paintThumbs(root);
   root.querySelector('#photo')!.addEventListener('change', async (ev) => {
+    const files = [...((ev.target as HTMLInputElement).files ?? [])];
+    for (const file of files) draft.photoIds!.push(await savePhoto(file));
+    draft.photoId = draft.photoId ?? draft.photoIds![0];
+    paintShots();
+    toast(files.length > 1 ? `${files.length} photos added` : 'Photo added');
+  });
+  root.querySelector('#shots')!.addEventListener('click', (ev) => {
+    const target = ev.target as HTMLElement;
+    const cover = target.closest<HTMLElement>('[data-cover]');
+    if (cover) draft.photoId = cover.dataset.cover;
+    const gone = target.closest<HTMLElement>('[data-drop]');
+    if (gone) {
+      draft.photoIds = draft.photoIds!.filter((p) => p !== gone.dataset.drop);
+      if (draft.photoId === gone.dataset.drop) draft.photoId = draft.photoIds[0];
+    }
+    if (cover || gone) paintShots();
+  });
+  root.querySelector('#scan')?.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    draft.photoId = await savePhoto(file);
-    toast('Photo added');
+    const host = sheet(
+      'Reading the page',
+      `<p class="line" id="ocrState">Loading the reader…</p><progress id="ocrBar" max="1" value="0"></progress>
+       <p class="line sub">It all happens on this phone. The first time, the reader itself downloads once.</p>`,
+    );
+    try {
+      const { readText } = await import('../../ui/ocr');
+      const text = await readText(file, (fraction, status) => {
+        (host.querySelector('#ocrBar') as HTMLProgressElement).value = fraction;
+        host.querySelector('#ocrState')!.textContent = status.includes('recogniz') ? 'Reading…' : 'Loading the reader…';
+      });
+      host.querySelector('.sheet-body')!.innerHTML = `
+        <label class="field"><span class="tag">What it read — tidy it up if you like</span>
+          <textarea class="dest area" id="ocrText" rows="14">${text.replace(/</g, '&lt;')}</textarea></label>
+        <button class="big tap" id="ocrGo" data-done="1">MAKE A RECIPE OF IT</button>`;
+      host.querySelector('#ocrGo')!.addEventListener('click', async () => {
+        const parsed = importFromText((host.querySelector('#ocrText') as HTMLTextAreaElement).value);
+        parsed.photoIds = [await savePhoto(file)];
+        parsed.photoId = parsed.photoIds[0];
+        pending = parsed;
+        recipeEditView(root);
+      });
+    } catch {
+      host.querySelector('#ocrState')!.textContent =
+        'The reader could not load — it needs the internet the first time. Paste the text instead.';
+    }
   });
   root.querySelector('#fromUrl')?.addEventListener('click', () => {
     const host = sheet(
@@ -420,7 +518,7 @@ export function recipeEditView(root: HTMLElement, id?: string): () => void {
       } else {
         const data = JSON.parse(await file.text()) as unknown;
         const list = Array.isArray(data) ? data : [data];
-        for (const r of list) saveRecipe(fromMela(r as never));
+        for (const r of list) saveRecipe(await fromMelaWithPhotos(r as never, putPhoto));
         toast(`${list.length} imported`);
       }
       location.hash = '#/cook';
@@ -441,6 +539,13 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
     return () => {};
   }
   let step = 0;
+  // headings become the label above the steps that follow them
+  const steps: (typeof recipe.steps[number] & { group?: string })[] = [];
+  let group: string | undefined;
+  for (const s of recipe.steps) {
+    if (s.header) group = s.text;
+    else steps.push({ ...s, group });
+  }
   const timers: { name: string; endsAt: number }[] = [];
   let lock: WakeLockSentinel | null = null;
   void (async () => {
@@ -452,7 +557,7 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
   })();
 
   const draw = (): void => {
-    const current = recipe.steps[step];
+    const current = steps[step];
     root.innerHTML = `
       <section class="cookmode" id="stage">
         <header class="run-head">
@@ -460,23 +565,24 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
           <button class="link tap" id="ings">Ingredients</button>
         </header>
         <div class="stage-mid">
-          <p class="tag">Step ${step + 1} of ${recipe.steps.length}</p>
-          <p class="stepbig">${current?.text ?? 'Done. Eat.'}</p>
+          <p class="tag">${current?.group ? `${mdInline(current.group)} · ` : ''}Step ${step + 1} of ${steps.length}</p>
+          <p class="stepbig">${current ? mdInline(current.text) : 'Done. Eat.'}</p>
           ${current?.timerSec ? `<button class="chip tap" id="startTimer">start ${clock(current.timerSec)} timer</button>` : ''}
         </div>
         <div class="timers" id="timers"></div>
         <footer class="run-foot">
-          <div class="dots">${recipe.steps
+          <div class="dots">${steps
             .map((_, i) => `<i class="dot-step${i === step ? ' on' : ''}"></i>`)
             .join('')}</div>
           <div class="cook-nav">
             <button class="chip tap" id="prev">back</button>
             ${
-              step < recipe.steps.length - 1
+              step < steps.length - 1
                 ? '<button class="big tap" id="next">NEXT</button>'
                 : '<button class="big tap" id="done">COOKED IT</button>'
             }
           </div>
+          <p class="line sub keys">← → or space to move · T for the timer · Esc to leave</p>
         </footer>
       </section>`;
     paintTimers();
@@ -497,7 +603,7 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
 
   const wire = (): void => {
     root.querySelector('#next')?.addEventListener('click', () => {
-      step = Math.min(recipe.steps.length - 1, step + 1);
+      step = Math.min(steps.length - 1, step + 1);
       draw();
     });
     root.querySelector('#prev')?.addEventListener('click', () => {
@@ -510,7 +616,7 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
       location.hash = `#/cook/recipe/${recipe.id}`;
     });
     root.querySelector('#startTimer')?.addEventListener('click', () => {
-      const seconds = recipe.steps[step].timerSec ?? 60;
+      const seconds = steps[step].timerSec ?? 60;
       timers.push({ name: `step ${step + 1}`, endsAt: Date.now() + seconds * 1000 });
       paintTimers();
       toast('Timer running');
@@ -518,7 +624,9 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
     root.querySelector('#ings')?.addEventListener('click', () => {
       sheet(
         'Ingredients',
-        `<ul class="ings">${recipe.ingredients.map((i) => `<li>${ingredientLine(i)}</li>`).join('')}</ul>`,
+        `<ul class="ings">${recipe.ingredients
+          .map((i) => (i.header ? `<li class="group">${mdInline(i.item)}</li>` : `<li>${ingredientLine(i)}</li>`))
+          .join('')}</ul>`,
       );
     });
     root.querySelector('#timers')?.addEventListener('click', (ev) => {
@@ -527,11 +635,21 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
       timers.splice(Number(stop.dataset.stop), 1);
       paintTimers();
     });
-    root.querySelector('#stage')?.addEventListener('keydown', (ev) => {
-      if ((ev as KeyboardEvent).key === 'ArrowRight') root.querySelector<HTMLElement>('#next')?.click();
-      if ((ev as KeyboardEvent).key === 'ArrowLeft') root.querySelector<HTMLElement>('#prev')?.click();
-    });
   };
+
+  // the whole page listens, so a keyboard works without first finding the right element
+  const onKey = (ev: KeyboardEvent): void => {
+    if (document.querySelector('.sheet-host') || (ev.target as HTMLElement).closest('input, textarea')) return;
+    if (ev.key === 'ArrowRight' || ev.key === ' ' || ev.key === 'PageDown') {
+      ev.preventDefault();
+      root.querySelector<HTMLElement>('#next')?.click();
+    } else if (ev.key === 'ArrowLeft' || ev.key === 'PageUp') {
+      ev.preventDefault();
+      root.querySelector<HTMLElement>('#prev')?.click();
+    } else if (ev.key === 't' || ev.key === 'T') root.querySelector<HTMLElement>('#startTimer')?.click();
+    else if (ev.key === 'Escape') location.hash = `#/cook/recipe/${recipe.id}`;
+  };
+  document.addEventListener('keydown', onKey);
 
   draw();
   const ticker = window.setInterval(() => {
@@ -546,6 +664,7 @@ export function cookModeView(root: HTMLElement, id: string): () => void {
 
   return () => {
     clearInterval(ticker);
+    document.removeEventListener('keydown', onKey);
     void lock?.release();
   };
 }

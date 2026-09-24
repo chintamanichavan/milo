@@ -3,13 +3,18 @@ export function sheet(title: string, body: string): HTMLElement {
   const host = document.createElement('div');
   host.className = 'sheet-host';
   host.innerHTML = `<div class="sheet-back"></div>
-    <div class="sheet" role="dialog" aria-label="${title}">
+    <div class="sheet" role="dialog" aria-label="${title}" tabindex="-1">
       <header><span class="tag">${title}</span>
         <button class="link tap" data-close="1">Close</button></header>
       <div class="sheet-body">${body}</div>
     </div>`;
   document.body.appendChild(host);
-  requestAnimationFrame(() => host.classList.add('open'));
+  requestAnimationFrame(() => {
+    host.classList.add('open');
+    // focus comes into the sheet, so Escape and the keyboard land here
+    if (!host.contains(document.activeElement))
+      host.querySelector<HTMLElement>('.sheet')?.focus({ preventScroll: true });
+  });
   const close = (): void => {
     host.classList.remove('open');
     setTimeout(() => host.remove(), 200);

@@ -122,6 +122,8 @@ interface MelaFile {
   favorite?: boolean;
   prepTime?: string;
   cookTime?: string;
+  /** base64 JPEGs, as Mela writes them */
+  images?: string[];
 }
 
 export function fromMela(json: MelaFile): Recipe {
@@ -138,6 +140,48 @@ export function fromMela(json: MelaFile): Recipe {
   return recipe;
 }
 
+const toBase64 = async (blob: Blob): Promise<string> => {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
+
+/** a .melarecipe with its photos in it, the way Mela itself shares one */
+export async function toMelaWithPhotos(
+  recipe: Recipe,
+  getBlob: (id: string) => Promise<Blob | null>,
+): Promise<string> {
+  const ids = recipe.photoIds?.length ? recipe.photoIds : recipe.photoId ? [recipe.photoId] : [];
+  const images: string[] = [];
+  for (const id of ids) {
+    const blob = await getBlob(id);
+    if (blob) images.push(await toBase64(blob));
+  }
+  return JSON.stringify({ ...JSON.parse(toMela(recipe)), images }, null, 2);
+}
+
+/** read one back, photos and all */
+export async function fromMelaWithPhotos(json: MelaFile, put: (blob: Blob) => Promise<string>): Promise<Recipe> {
+  const recipe = fromMela(json);
+  const ids: string[] = [];
+  for (const b64 of json.images ?? []) {
+    try {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      ids.push(await put(new Blob([bytes], { type: 'image/jpeg' })));
+    } catch {
+      /* a broken image is skipped, not fatal */
+    }
+  }
+  if (ids.length) {
+    recipe.photoIds = ids;
+    recipe.photoId = ids[0];
+  }
+  return recipe;
+}
+
 export const toMela = (recipe: Recipe): string =>
   JSON.stringify(
     {
@@ -145,8 +189,8 @@ export const toMela = (recipe: Recipe): string =>
       title: recipe.title,
       text: recipe.description ?? '',
       yield: String(recipe.servings),
-      ingredients: recipe.ingredients.map((i) => i.raw || i.item).join('\n'),
-      instructions: recipe.steps.map((s) => s.text).join('\n'),
+      ingredients: recipe.ingredients.map((i) => (i.header ? `# ${i.item}` : i.raw || i.item)).join('\n'),
+      instructions: recipe.steps.map((s) => (s.header ? `# ${s.text}` : s.text)).join('\n'),
       notes: recipe.notes ?? '',
       link: recipe.source ?? '',
       categories: recipe.categories,

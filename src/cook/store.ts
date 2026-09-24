@@ -90,6 +90,7 @@ export function addToList(listId: string, items: ShoppingItem[]): void {
 export function recipeToItems(recipe: Recipe, servings: number, aisles: Record<string, string>): ShoppingItem[] {
   const factor = servings / (recipe.servings || 1);
   return recipe.ingredients
+    .filter((ing) => !ing.header)
     .map((raw) => scaleIngredient(raw, factor))
     .filter((ing) => ing.item)
     .map((ing) => ({

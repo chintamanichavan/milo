@@ -22,7 +22,7 @@ async function put(id: string, blob: Blob): Promise<void> {
   db.close();
 }
 
-export async function getPhoto(id: string): Promise<string | null> {
+export async function getPhotoBlob(id: string): Promise<Blob | null> {
   try {
     const db = await open();
     const blob = await new Promise<Blob | undefined>((resolve, reject) => {
@@ -32,15 +32,42 @@ export async function getPhoto(id: string): Promise<string | null> {
       request.onerror = () => reject(request.error);
     });
     db.close();
-    return blob ? URL.createObjectURL(blob) : null;
+    return blob ?? null;
   } catch {
     return null;
   }
 }
 
+export async function getPhoto(id: string): Promise<string | null> {
+  const blob = await getPhotoBlob(id);
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
+/** store a photo that is already the right size, such as one from an imported file */
+export async function putPhoto(blob: Blob): Promise<string> {
+  const id = `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  await put(id, blob);
+  return id;
+}
+
+export async function deletePhoto(id: string): Promise<void> {
+  try {
+    const db = await open();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    /* already gone */
+  }
+}
+
 /** Downscale before storing — a phone photo is far bigger than a recipe needs. */
-export async function savePhoto(file: File, maxWidth = 1200): Promise<string> {
-  const id = `p-${Date.now()}`;
+export async function savePhoto(file: Blob, maxWidth = 1200): Promise<string> {
+  const id = `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxWidth / bitmap.width);
   const canvas = document.createElement('canvas');
