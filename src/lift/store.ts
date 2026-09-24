@@ -58,7 +58,8 @@ export interface LiftState {
   settings: LiftSettings;
 }
 
-export const LIFT_KEY = 'c25k.lift.v1';
+export { LIFT_KEY } from '../keys';
+import { LIFT_KEY } from '../keys';
 
 const defaults = (): LiftSettings => ({
   units: 'lb',

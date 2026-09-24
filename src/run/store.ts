@@ -1,10 +1,4 @@
-import { COOK_KEY } from '../cook/store';
-import { FOCUS_KEY } from '../focus/store';
-import { FUEL_KEY } from '../fuel/store';
-import { HABITS_KEY } from '../habits/store';
-import { LIFT_KEY } from '../lift/store';
-import { TABS_KEY } from '../ui/nav';
-import { WATER_KEY } from '../water/key';
+import { COOK_KEY, FOCUS_KEY, FUEL_KEY, HABITS_KEY, LIFT_KEY, TABS_KEY, WATER_KEY } from '../keys';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
 export interface CompletedRun {

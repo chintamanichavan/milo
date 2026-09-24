@@ -58,7 +58,8 @@ export interface FuelState {
   onboarded?: boolean;
 }
 
-export const FUEL_KEY = 'c25k.fuel.v1';
+export { FUEL_KEY } from '../keys';
+import { FUEL_KEY } from '../keys';
 
 const blank = (): FuelState => ({
   entries: [],

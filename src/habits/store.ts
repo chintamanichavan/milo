@@ -1,7 +1,8 @@
 import { dayKey } from '../ui/time';
 import type { Entry, Habit, HabitState, Mark, Reflection, Schedule } from './model';
 
-export const HABITS_KEY = 'c25k.habits.v1';
+export { HABITS_KEY } from '../keys';
+import { HABITS_KEY } from '../keys';
 
 const blank = (): HabitState => ({
   habits: [],

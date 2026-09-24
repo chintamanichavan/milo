@@ -10,7 +10,8 @@ import {
   type Slot,
 } from './model';
 
-export const COOK_KEY = 'c25k.cook.v1';
+export { COOK_KEY } from '../keys';
+import { COOK_KEY } from '../keys';
 
 const blank = (): CookState => ({
   recipes: [],

@@ -64,7 +64,8 @@ export interface FocusState {
   earned: Record<string, string>;
 }
 
-export const FOCUS_KEY = 'c25k.focus.v1';
+export { FOCUS_KEY } from '../keys';
+import { FOCUS_KEY } from '../keys';
 
 /** six quiet swatches for labels */
 export const SWATCHES = ['#a78bfa', '#5eead4', '#c5f74f', '#fbbf24', '#f472b6', '#60a5fa'];

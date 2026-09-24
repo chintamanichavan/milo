@@ -21,14 +21,9 @@ import {
 } from '../store';
 import { COOL_DOWN_MOVES, WARM_UP_MOVES, WEEK_TIPS } from '../tips';
 
-export function runSubNav(active: string): string {
-  const link = (id: string, label: string): string =>
-    `<a class="subtab tap${active === id ? ' on' : ''}" href="#/${id ? `run/${id}` : ''}">${label}</a>`;
-  return `<nav class="subnav">${link('', 'Today')}${link('history', 'History')}${link(
-    'tips',
-    'Tips',
-  )}${link('plans', 'Plans')}${link('settings', 'Settings')}</nav>`;
-}
+import { runSubNav } from './subnav';
+
+export { runSubNav };
 
 const shell = (active: string, body: string): string => `
   <section class="today detail">

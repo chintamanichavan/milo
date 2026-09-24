@@ -16,7 +16,7 @@ import {
 } from '../store';
 import { WEEK_TIPS } from '../tips';
 import { TOTAL_RUNS, totalLine } from '../weeks';
-import { runSubNav } from './pages';
+import { runSubNav } from './subnav';
 
 const watchHint = (recipe: string): string =>
   `<details class="watch"><summary><span class="tap">${watchGlyph()} set up on Watch</span></summary>

@@ -28,7 +28,8 @@ export const LINKS: { id: Tab; label: string; href: string; blurb: string }[] = 
   { id: 'water', label: 'Water', href: '#/water', blurb: 'drink up' },
 ];
 
-export const TABS_KEY = 'c25k.nav.v1';
+export { TABS_KEY } from '../keys';
+import { TABS_KEY } from '../keys';
 
 /** four tabs across the bottom and More in the fifth slot; the rest live behind More */
 export const BAR_SLOTS = 4;
