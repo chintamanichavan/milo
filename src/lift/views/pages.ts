@@ -7,7 +7,10 @@ import { sheet } from '../../ui/sheet';
 import { clock, dayKey } from '../../ui/time';
 import { toast } from '../../ui/toast';
 import { alternatives, REP_PRESETS, item as newItem, type Routine } from '../data';
-import { GEARS, LIBRARY, MUSCLES, type Exercise } from '../library';
+import { ratingHtml } from '../evaluate';
+import { muscleMap, setsPerMuscle } from '../muscles';
+import { bindGymsPanel, gymsPanel } from './more';
+import { GEAR_NAMES, GEARS, LIBRARY, MUSCLES, type Exercise } from '../library';
 import { generatePlan, isDeloadWeek, phaseFor, type Answers } from '../plan';
 import { recordsFor, standardFor } from '../records';
 import {
@@ -18,19 +21,19 @@ import {
   fromLb,
   lastPerformed,
   loadLift,
-  plates,
   saveLift,
   saveRoutine,
   setLiftSettings,
   setsDone,
   showWeight,
-  toLb,
   toggleFavourite,
   trendWeight,
   volumeOf,
   weeklyVolume,
   weekStreak,
   type LiftState,
+  activeGym,
+  gymHas,
 } from '../store';
 
 export function liftSubNav(active: string): string {
@@ -56,6 +59,16 @@ const shell = (active: string, body: string): string => `
 
 const allExercises = (state: LiftState): Exercise[] => [...LIBRARY, ...state.customs];
 
+/** photos of your own for exercises, painted in once they are on screen */
+export async function paintLiftPhotos(root: ParentNode): Promise<void> {
+  const { getPhoto } = await import('../../cook/photos');
+  for (const el of root.querySelectorAll<HTMLElement>('[data-photo]')) {
+    if (!el.dataset.photo || el.style.backgroundImage) continue;
+    const url = await getPhoto(el.dataset.photo);
+    if (url) el.style.backgroundImage = `url(${url})`;
+  }
+}
+
 /* ---------- 12. exercise library ---------- */
 
 export function libraryView(root: HTMLElement): () => void {
@@ -64,6 +77,8 @@ export function libraryView(root: HTMLElement): () => void {
   let muscle = '';
   let gear = '';
   let favesOnly = false;
+  let gymOnly = false;
+  const imgFor = (id: string): string | undefined => state.settings.images?.[id];
 
   let shown = 60;
   const draw = (): void => {
@@ -71,6 +86,7 @@ export function libraryView(root: HTMLElement): () => void {
       if (favesOnly && !state.favourites.includes(e.id)) return false;
       if (muscle && e.muscle !== muscle) return false;
       if (gear && e.gear !== gear) return false;
+      if (gymOnly && !gymHas(activeGym(state), e.gear)) return false;
       if (!query) return true;
       const hay = `${e.name} ${e.muscle} ${e.also} ${e.gear}`.toLowerCase();
       return query
@@ -84,9 +100,11 @@ export function libraryView(root: HTMLElement): () => void {
           .map(
             (e) => `<details class="day ex-row"><summary>
               <span>${state.favourites.includes(e.id) ? '★ ' : ''}${e.name}</span>
-              <span class="sub">${e.muscle} · ${e.gear}</span></summary>
+              <span class="sub">${e.muscle} · ${GEAR_NAMES[e.gear] ?? e.gear}</span></summary>
+              ${imgFor(e.id) ? `<span class="ex-photo" data-photo="${imgFor(e.id)}"></span>` : ''}
               <p class="line sub">${e.how}</p>
               <p class="line sub">Also works: ${e.also || '—'}</p>
+              <p class="line sub">${ratingHtml(e)}</p>
               <div class="ex-foot">
                 <button class="link tap" data-fav="${e.id}">${
                   state.favourites.includes(e.id) ? 'unfavourite' : 'favourite'
@@ -117,7 +135,8 @@ export function libraryView(root: HTMLElement): () => void {
       </div>
       <div class="chips" id="gears">
         <button class="chip tap on" data-gear="">any kit</button>
-        ${GEARS.map((g) => `<button class="chip tap" data-gear="${g}">${g}</button>`).join('')}
+        ${GEARS.map((g) => `<button class="chip tap" data-gear="${g}">${GEAR_NAMES[g]}</button>`).join('')}
+        <button class="chip tap" id="mine">at ${activeGym(state).name}</button>
         <button class="chip tap" id="faves">★ favourites</button>
         <button class="chip tap" id="addEx">+ custom</button>
       </div>
@@ -144,6 +163,12 @@ export function libraryView(root: HTMLElement): () => void {
   };
   chipGroup('muscles', 'muscle');
   chipGroup('gears', 'gear');
+  root.querySelector('#mine')!.addEventListener('click', (ev) => {
+    gymOnly = !gymOnly;
+    (ev.target as HTMLElement).classList.toggle('on', gymOnly);
+    draw();
+  });
+  root.querySelector('#libList')!.addEventListener('toggle', () => void paintLiftPhotos(root), true);
   root.querySelector('#faves')!.addEventListener('click', (ev) => {
     favesOnly = !favesOnly;
     (ev.target as HTMLElement).classList.toggle('on', favesOnly);
@@ -258,10 +283,20 @@ export function liftHistoryView(root: HTMLElement): () => void {
              .join(', ')}</p>`,
          )
          .join('')}
+       <div class="chips">
+         <button class="chip tap" id="card">share a card</button>
+         <button class="chip tap" id="copyText">copy as text</button>
+       </div>
        <div class="row-actions">
          <button class="link tap" data-done="1" id="dup">Save as a new routine</button>
          <button class="link tap" data-done="1" id="del">Delete this session</button>
        </div>`,
+    );
+    host.querySelector('#card')!.addEventListener('click', () =>
+      void import('./more').then(({ shareSession }) => shareSession(loadLift(), session)),
+    );
+    host.querySelector('#copyText')!.addEventListener('click', () =>
+      void import('./more').then(({ copySession }) => copySession(loadLift(), session)),
     );
     host.querySelector('#dup')!.addEventListener('click', () => {
       const next = loadLift();
@@ -336,14 +371,25 @@ export function liftStatsView(root: HTMLElement): () => void {
     volumes.push(mine.reduce((sum, s) => sum + volumeOf(s), 0));
   }
   const volume = weeklyVolume(state);
+  // main exercises: the ones that turn up in the most sessions
   const counts = new Map<string, number>();
   for (const session of state.sessions)
-    for (const entry of session.entries)
-      counts.set(entry.exerciseId, (counts.get(entry.exerciseId) ?? 0) + 1);
+    for (const id of new Set(session.entries.map((e) => e.exerciseId)))
+      counts.set(id, (counts.get(id) ?? 0) + 1);
   const most = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
-    .map(([id, n]) => ({ label: exerciseById(state, id).name, value: n }));
+    .map(([id, n]) => ({ label: exerciseById(state, id).name, value: n, note: n === 1 ? 'session' : 'sessions' }));
+  // the muscle split, over the chosen range
+  const RANGES: [string, string, number][] = [
+    ['30d', '30 days', 30],
+    ['3m', '3 months', 91],
+    ['1y', 'a year', 365],
+    ['all', 'all time', 0],
+  ];
+  const wanted = location.hash.split('/')[3] ?? '30d';
+  const range = RANGES.find((r) => r[0] === wanted) ?? RANGES[0];
+  const split = setsPerMuscle(state, range[2] ? Date.now() - range[2] * 86_400_000 : 0);
 
   root.innerHTML = shell(
     'stats',
@@ -373,7 +419,29 @@ export function liftStatsView(root: HTMLElement): () => void {
         ' sets',
       )}
     </div>
-    <div class="panel"><p class="tag">Most trained</p>${barList(most, '×')}</div>`,
+    <div class="panel muscle-split">
+      <p class="tag">Muscle distribution<span>sets, ${range[1]}</span></p>
+      <div class="chips" id="split">${RANGES.map(
+        ([id, label]) => `<a class="chip tap${id === range[0] ? ' on' : ''}" href="#/lift/stats/${id}">${label}</a>`,
+      ).join('')}</div>
+      ${muscleMap(split)}
+      ${barList(
+        [...split.entries()]
+          .filter(([, n]) => n > 0)
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, value]) => ({ label, value: Math.round(value * 10) / 10 })),
+        ' sets',
+      )}
+      <p class="line sub">A set counts in full for the main muscle and half for each helper.</p>
+    </div>
+    <div class="panel"><p class="tag">Main exercises<span>by sessions</span></p>${barList(most, '')}</div>
+    <div class="panel">
+      <p class="tag">More</p>
+      <div class="chips">
+        <a class="chip tap" href="#/lift/report">monthly report</a>
+        <a class="chip tap" href="#/lift/data">export and import</a>
+      </div>
+    </div>`,
   );
   return () => {};
 }
@@ -447,6 +515,7 @@ export function routinesView(root: HTMLElement): () => void {
         <button class="chip tap" id="newRoutine">+ routine</button>
         <button class="chip tap" id="empty">Empty workout</button>
         <button class="chip tap" id="generate">Build me a plan</button>
+        <label class="chip tap">import a routine<input type="file" id="routineFile" accept=".json,application/json" hidden></label>
       </div>
       ${
         state.settings.planId
@@ -482,6 +551,16 @@ export function routinesView(root: HTMLElement): () => void {
       .join('')}`,
   );
 
+  root.querySelector('#routineFile')!.addEventListener('change', async (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const { adoptShared, readShared } = await import('./more');
+    const shared = readShared(await file.text());
+    if (!shared) return toast('That file is not a Milo routine');
+    adoptShared(shared);
+    toast(`${shared.name} added`);
+    routinesView(root);
+  });
   root.querySelector('#newRoutine')!.addEventListener('click', () => {
     const id = `r-${Date.now()}`;
     saveRoutine({ id, name: 'New routine', folder: 'Routines', items: [newItem('squat')] });
@@ -511,12 +590,9 @@ export function routinesView(root: HTMLElement): () => void {
            <option value="intermediate">a year or two in</option>
            <option value="advanced">experienced</option>
          </select></label>
-       <label class="field"><span class="tag">Equipment</span>
-         <select class="dest" id="gKit">
-           <option value="gym">full gym</option>
-           <option value="dumbbells">dumbbells only</option>
-           <option value="bodyweight">bodyweight only</option>
-         </select></label>
+       <p class="line sub">Built from what ${activeGym(loadLift()).name} has: ${activeGym(loadLift())
+         .equipment.map((g) => GEAR_NAMES[g])
+         .join(', ')}. Change it in Settings.</p>
        <label class="field"><span class="tag">Session length</span>
          <select class="dest" id="gMin">${[30, 45, 60, 90]
            .map((m) => `<option${m === 60 ? ' selected' : ''}>${m}</option>`)
@@ -529,7 +605,8 @@ export function routinesView(root: HTMLElement): () => void {
         goal: value('gGoal') as Answers['goal'],
         days: Number(value('gDays')),
         experience: value('gExp') as Answers['experience'],
-        kit: value('gKit') as Answers['kit'],
+        kit: 'gym',
+        equipment: activeGym(loadLift()).equipment,
         minutes: Number(value('gMin')),
       };
       const plan = generatePlan(answers);
@@ -580,10 +657,14 @@ export function routineEditView(root: HTMLElement, id: string): () => void {
       <div class="chips">
         <button class="chip tap" id="addItem">+ exercise</button>
         <a class="chip tap" href="#/lift/session/${routine.id}">start it</a>
+        <button class="chip tap" id="shareRoutine">share</button>
         <button class="chip tap" id="delRoutine">delete</button>
       </div>
     </div>
     <div class="panel">${rows || '<p class="line sub">No exercises yet.</p>'}</div>`,
+  );
+  root.querySelector('#shareRoutine')!.addEventListener('click', () =>
+    void import('./more').then(({ shareRoutine }) => shareRoutine(loadLift(), routine)),
   );
 
   const persist = (): void => {
@@ -664,10 +745,10 @@ export function routineEditView(root: HTMLElement, id: string): () => void {
       const current = exerciseById(state, routine.items[swap].exerciseId);
       const host = sheet(
         `Swap ${current.name}`,
-        `<div class="cards">${alternatives(current, 10)
+        `<div class="cards swap-cards">${alternatives(current, 10, activeGym(state).equipment)
           .map(
             (a) => `<button class="card tap" data-done="1" data-alt="${a.id}"><b>${a.name}</b>
-              <span class="tag">${a.muscle} · ${a.gear}</span></button>`,
+              <span class="tag">${a.muscle} · ${GEAR_NAMES[a.gear]}</span>${ratingHtml(a)}</button>`,
           )
           .join('')}</div>`,
       );
@@ -745,16 +826,7 @@ export function liftSettingsView(root: HTMLElement): () => void {
       <label class="field row"><span>Default rest (s)</span>
         <input class="num" id="rest" value="${s.restSec}"></label>
     </div>
-    <div class="panel">
-      <p class="tag">Plate calculator</p>
-      <label class="field row"><span>Bar weight (${s.units})</span>
-        <input class="num" id="bar" value="${fromLb(s.barLb, s.units)}"></label>
-      <label class="field"><span class="tag">Plates you own (${s.units}, comma separated)</span>
-        <input class="dest" id="plates" value="${s.plates.map((p) => fromLb(p, s.units)).join(', ')}"></label>
-      <p class="line sub">Example: ${showWeight(225, s.units)} → ${plates(225, s.barLb, s.plates)
-        .map((p) => fromLb(p, s.units))
-        .join(' + ')} a side.</p>
-    </div>
+    ${gymsPanel(state)}
     <div class="panel">
       <p class="tag">Blocks</p>
       <label class="sw tap"><input type="checkbox" id="deload" ${s.deloadNext ? 'checked' : ''}>
@@ -774,17 +846,7 @@ export function liftSettingsView(root: HTMLElement): () => void {
   root.querySelector('#rest')!.addEventListener('change', (ev) =>
     setLiftSettings({ restSec: Number((ev.target as HTMLInputElement).value) }),
   );
-  root.querySelector('#bar')!.addEventListener('change', (ev) =>
-    setLiftSettings({ barLb: toLb(Number((ev.target as HTMLInputElement).value), s.units) }),
-  );
-  root.querySelector('#plates')!.addEventListener('change', (ev) => {
-    const list = (ev.target as HTMLInputElement).value
-      .split(',')
-      .map((x) => toLb(Number(x.trim()), s.units))
-      .filter((x) => x > 0);
-    setLiftSettings({ plates: list });
-    liftSettingsView(root);
-  });
+  bindGymsPanel(root, () => liftSettingsView(root));
   root.querySelector('#deload')!.addEventListener('change', (ev) =>
     setLiftSettings({ deloadNext: (ev.target as HTMLInputElement).checked }),
   );

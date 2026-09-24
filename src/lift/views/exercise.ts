@@ -2,6 +2,8 @@ import { miloMark } from '../../badge';
 import { lineChart } from '../../ui/chart';
 import { sheet } from '../../ui/sheet';
 import { toast } from '../../ui/toast';
+import { ratingHtml } from '../evaluate';
+import { GEAR_NAMES } from '../library';
 import { alternatives } from '../data';
 import { epley, recordsFor } from '../records';
 import { suggest, type SetLog } from '../progression';
@@ -14,8 +16,10 @@ import {
   sessionsWith,
   showWeight,
   toggleFavourite,
+  activeGym,
+  setLiftSettings,
 } from '../store';
-import { liftSubNav } from './pages';
+import { liftSubNav, paintLiftPhotos } from './pages';
 
 type Range = '1M' | '3M' | '6M' | '1Y';
 const DAYS: Record<Range, number> = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
@@ -84,11 +88,17 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
       ${liftSubNav('library')}
       <div class="hero">
         <p class="tag section"><a class="tap" href="#/lift/library">← Exercises</a></p>
+        ${
+          state.settings.images?.[id]
+            ? `<div class="hero-photo ex-hero" data-photo="${state.settings.images[id]}"></div>`
+            : ''
+        }
         <h1>${ex.name}</h1>
-        <p class="line sub">${ex.muscle}${ex.also ? ` · also ${ex.also}` : ''} · ${ex.gear} · ${
+        <p class="line sub">${ex.muscle}${ex.also ? ` · also ${ex.also}` : ''} · ${GEAR_NAMES[ex.gear] ?? ex.gear} · ${
           ex.inc ? `${fromLb(ex.inc, units)} ${units} steps` : 'bodyweight'
         } · ${restFor(state, id)}s rest</p>
         <p class="line">${ex.how}</p>
+        <p class="line sub">${ratingHtml(ex)}</p>
         <p class="line why">${tip.why}</p>
         ${tip.weightLb ? `<p class="line sub">Next time: <b>${showWeight(tip.weightLb, units)}</b></p>` : ''}
         <div class="chips">
@@ -96,6 +106,8 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
             state.favourites.includes(id) ? '★ favourite' : '☆ favourite'
           }</button>
           <button class="chip tap" id="swap">alternatives</button>
+          <label class="chip tap">${state.settings.images?.[id] ? 'change photo' : '+ photo'}<input type="file" id="exPhoto" accept="image/*" hidden></label>
+          ${state.settings.images?.[id] ? '<button class="chip tap" id="exPhotoDrop">remove photo</button>' : ''}
         </div>
         <div class="chips">
           ${(['1M', '3M', '6M', '1Y'] as Range[])
@@ -127,13 +139,30 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
     toggleFavourite(id);
     liftExerciseView(root, id);
   });
+  void paintLiftPhotos(root);
+  root.querySelector('#exPhoto')!.addEventListener('change', async (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const { savePhoto } = await import('../../cook/photos');
+    const photoId = await savePhoto(file, 1000);
+    const images = { ...(loadLift().settings.images ?? {}), [id]: photoId };
+    setLiftSettings({ images });
+    toast('Photo added');
+    liftExerciseView(root, id);
+  });
+  root.querySelector('#exPhotoDrop')?.addEventListener('click', () => {
+    const images = { ...(loadLift().settings.images ?? {}) };
+    delete images[id];
+    setLiftSettings({ images });
+    liftExerciseView(root, id);
+  });
   root.querySelector('#swap')!.addEventListener('click', () => {
     sheet(
       `Instead of ${ex.name}`,
-      `<div class="cards">${alternatives(ex, 10)
+      `<div class="cards swap-cards">${alternatives(ex, 10, activeGym(loadLift()).equipment)
         .map(
           (a) => `<a class="card tap" href="#/lift/exercise/${a.id}"><b>${a.name}</b>
-            <span class="tag">${a.muscle} · ${a.gear}</span></a>`,
+            <span class="tag">${a.muscle} · ${GEAR_NAMES[a.gear]}</span>${ratingHtml(a)}</a>`,
         )
         .join('')}</div>`,
     );

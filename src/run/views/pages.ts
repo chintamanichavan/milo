@@ -8,7 +8,7 @@ import { PERSONAS, personaById } from '../coach';
 import { distanceLabel, paceLabel, routeSvg } from '../gps';
 import { buildIcs, downloadIcs, nextRunDay } from '../ics';
 import { PROGRAMMES, programmeById } from '../plans';
-import { applyTheme } from '../theme';
+import { ACCENTS, applyTheme } from '../theme';
 import {
   deleteRun,
   graduated,
@@ -379,6 +379,12 @@ export function runSettingsView(root: HTMLElement): () => void {
           .map((t) => `<button class="chip tap${s.theme === t ? ' on' : ''}" data-theme="${t}">${t}</button>`)
           .join('')}
       </div>
+      <p class="tag">Accent</p>
+      <div class="chips" id="accent">${ACCENTS.map(
+        (a) => `<button class="chip tap accent-chip${(s.accent ?? 'lime') === a.id ? ' on' : ''}" data-accent="${a.id}"
+          aria-label="${a.name} accent"><i style="background:${a.swatch}"></i>${a.name}</button>`,
+      ).join('')}</div>
+      <p class="line sub">Focus keeps its violet and Water its teal; everything else takes the accent.</p>
     </div>
     <div class="panel">
       <p class="tag">Tab bar order</p>
@@ -456,6 +462,13 @@ export function runSettingsView(root: HTMLElement): () => void {
     const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-theme]');
     if (!chip) return;
     setSettings({ theme: chip.dataset.theme as 'auto' | 'dark' | 'light' });
+    applyTheme();
+    runSettingsView(root);
+  });
+  root.querySelector('#accent')!.addEventListener('click', (ev) => {
+    const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-accent]');
+    if (!chip) return;
+    setSettings({ accent: chip.dataset.accent });
     applyTheme();
     runSettingsView(root);
   });

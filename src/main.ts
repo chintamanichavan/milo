@@ -70,6 +70,9 @@ async function route(): Promise<void> {
   else if (a === 'lift' && b?.startsWith('stats')) (await chunks.liftPages()).liftStatsView(app);
   else if (a === 'lift' && b === 'progress') (await chunks.liftPages()).progressView(app);
   else if (a === 'lift' && b === 'settings') (await chunks.liftPages()).liftSettingsView(app);
+  else if (a === 'lift' && b === 'report') (await import('./lift/views/more')).liftReportView(app);
+  else if (a === 'lift' && b === 'data') (await import('./lift/views/more')).liftDataView(app);
+  else if (a === 'lift' && b?.startsWith('import')) (await import('./lift/views/more')).liftImportView(app);
   else if (a === 'lift') {
     const { liftTodayView } = await chunks.lift();
     mount(() => (cleanup = liftTodayView(app)));

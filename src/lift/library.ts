@@ -1,4 +1,14 @@
-export type Gear = 'barbell' | 'dumbbell' | 'bodyweight' | 'machine';
+export type Gear =
+  | 'barbell'
+  | 'dumbbell'
+  | 'bodyweight'
+  | 'machine'
+  | 'cable'
+  | 'kettlebell'
+  | 'band'
+  | 'smith'
+  | 'trapbar'
+  | 'ezbar';
 
 export interface Exercise {
   id: string;
@@ -39,7 +49,7 @@ export const LIBRARY: Exercise[] = [
   E('sissy-squat', 'Sissy squat', 'quads', '', 'bodyweight', 0, 'Rise onto the toes, lean back and bend the knees forward. Small range at first.'),
   E('deadlift', 'Deadlift', 'hamstrings', 'glutes, back', 'barbell', 10, 'Bar over mid-foot, shins close. Push the floor away, keep the bar against the legs, stand tall.'),
   E('rdl', 'Romanian deadlift', 'hamstrings', 'glutes, back', 'barbell', 10, 'Soft knees, push the hips back, bar sliding down the thighs until you feel the hamstrings. Stand up.'),
-  E('trap-bar', 'Trap bar deadlift', 'hamstrings', 'quads, glutes', 'barbell', 10, 'Stand inside the bar, handles at your sides. A friendlier deadlift for long limbs.'),
+  E('trap-bar', 'Trap bar deadlift', 'hamstrings', 'quads, glutes', 'trapbar', 10, 'Stand inside the bar, handles at your sides. A friendlier deadlift for long limbs.'),
   E('stiff-leg', 'Stiff-leg deadlift', 'hamstrings', 'glutes', 'barbell', 10, 'Legs almost straight, hinge at the hips. Lighter than a deadlift, and it should feel like stretching.'),
   E('good-morning', 'Good morning', 'hamstrings', 'back, glutes', 'barbell', 10, 'Bar on the back, hinge forward with a flat spine until the torso is near level.'),
   E('back-extension', 'Back extension', 'hamstrings', 'glutes, back', 'bodyweight', 5, 'Hips on the pad, lower until the torso hangs, then squeeze the glutes to come level.'),
@@ -48,7 +58,7 @@ export const LIBRARY: Exercise[] = [
   E('nordic', 'Nordic curl', 'hamstrings', '', 'bodyweight', 0, 'Ankles anchored, lower the body forward as slowly as you can. Brutal and brilliant.'),
   E('hip-thrust', 'Hip thrust', 'glutes', 'hamstrings', 'barbell', 10, 'Shoulders on a bench, bar over the hips. Drive the hips up until the body is a table, squeeze, lower.'),
   E('glute-bridge', 'Glute bridge', 'glutes', 'hamstrings', 'bodyweight', 5, 'Lie down, feet close to the hips, push the hips up and squeeze.'),
-  E('cable-kickback', 'Cable kickback', 'glutes', 'hamstrings', 'machine', 5, 'Cuff on the ankle, push the leg back and up without arching the low back.'),
+  E('cable-kickback', 'Cable kickback', 'glutes', 'hamstrings', 'cable', 5, 'Cuff on the ankle, push the leg back and up without arching the low back.'),
   E('abduction', 'Hip abduction', 'glutes', '', 'machine', 5, 'Knees against the pads, push outwards, return slowly.'),
   E('calf-raise', 'Standing calf raise', 'calves', '', 'machine', 5, 'Rise as high as you can, hold a second, lower until you feel a stretch.'),
   E('seated-calf', 'Seated calf raise', 'calves', '', 'machine', 5, 'Knees bent, pad on the thighs. Slow up, slower down.'),
@@ -58,7 +68,7 @@ export const LIBRARY: Exercise[] = [
   E('db-bench', 'Dumbbell bench press', 'chest', 'triceps, shoulders', 'dumbbell', 2.5, 'Dumbbells at chest width, press until they nearly touch above you.'),
   E('db-incline', 'Incline dumbbell press', 'chest', 'shoulders', 'dumbbell', 2.5, 'Incline bench, palms turned slightly in. Big stretch at the bottom.'),
   E('chest-press', 'Machine chest press', 'chest', 'triceps', 'machine', 5, 'Handles level with the mid-chest, press without shrugging.'),
-  E('cable-fly', 'Cable fly', 'chest', '', 'machine', 5, 'Slight bend in the elbows, bring the hands together in front, squeeze.'),
+  E('cable-fly', 'Cable fly', 'chest', '', 'cable', 5, 'Slight bend in the elbows, bring the hands together in front, squeeze.'),
   E('pec-deck', 'Pec deck', 'chest', '', 'machine', 5, 'Forearms on the pads, close the arms slowly, open under control.'),
   E('pushup', 'Push-up', 'chest', 'triceps, core', 'bodyweight', 0, 'Hands under the shoulders, body a straight line, chest to the floor.'),
   E('dip', 'Dip', 'chest', 'triceps', 'bodyweight', 5, 'Lean forward for chest, upright for triceps. Lower until the shoulders are level with the elbows.'),
@@ -67,30 +77,30 @@ export const LIBRARY: Exercise[] = [
   E('db-press', 'Dumbbell shoulder press', 'shoulders', 'triceps', 'dumbbell', 2.5, 'Sit tall, press from ear height until the arms are straight.'),
   E('arnold', 'Arnold press', 'shoulders', 'triceps', 'dumbbell', 2.5, 'Start with palms facing you, rotate as you press.'),
   E('lateral-raise', 'Lateral raise', 'shoulders', '', 'dumbbell', 2.5, 'Slight bend at the elbows, raise to shoulder height, lead with the elbows.'),
-  E('cable-lateral', 'Cable lateral raise', 'shoulders', '', 'machine', 5, 'Cable behind the body, raise across and out. Tension the whole way.'),
+  E('cable-lateral', 'Cable lateral raise', 'shoulders', '', 'cable', 5, 'Cable behind the body, raise across and out. Tension the whole way.'),
   E('front-raise', 'Front raise', 'shoulders', '', 'dumbbell', 2.5, 'Raise to eye level with straight arms. Do not swing.'),
   E('rear-delt-fly', 'Rear delt fly', 'shoulders', 'back', 'dumbbell', 2.5, 'Hinge forward, raise the arms out to the sides, thumbs down.'),
-  E('face-pull', 'Face pull', 'shoulders', 'back', 'machine', 5, 'Rope to the face, elbows high, finish with the hands beside the ears.'),
+  E('face-pull', 'Face pull', 'shoulders', 'back', 'cable', 5, 'Rope to the face, elbows high, finish with the hands beside the ears.'),
   E('upright-row', 'Upright row', 'shoulders', 'back', 'barbell', 5, 'Pull the bar to the chest with high elbows. Stop if the shoulders complain.'),
   E('row', 'Barbell row', 'back', 'biceps', 'barbell', 5, 'Hinge to about forty-five degrees, pull the bar to the belly, squeeze the shoulder blades.'),
   E('pendlay', 'Pendlay row', 'back', 'biceps', 'barbell', 5, 'Torso parallel, bar starts on the floor each rep. Explosive up, controlled down.'),
   E('db-row', 'Dumbbell row', 'back', 'biceps', 'dumbbell', 2.5, 'One hand on a bench, pull the dumbbell to the hip, elbow close.'),
   E('chest-row', 'Chest-supported row', 'back', 'biceps', 'dumbbell', 2.5, 'Chest on an incline bench so the low back does nothing but hold still.'),
-  E('cable-row', 'Seated cable row', 'back', 'biceps', 'machine', 5, 'Sit tall, pull to the navel, let the shoulder blades travel.'),
-  E('pulldown', 'Lat pulldown', 'back', 'biceps', 'machine', 5, 'Wide grip, pull the bar to the collarbone, chest proud.'),
+  E('cable-row', 'Seated cable row', 'back', 'biceps', 'cable', 5, 'Sit tall, pull to the navel, let the shoulder blades travel.'),
+  E('pulldown', 'Lat pulldown', 'back', 'biceps', 'cable', 5, 'Wide grip, pull the bar to the collarbone, chest proud.'),
   E('pullup', 'Pull-up', 'back', 'biceps', 'bodyweight', 5, 'Palms forward, pull until the chin passes the bar, lower all the way.'),
   E('chinup', 'Chin-up', 'back', 'biceps', 'bodyweight', 5, 'Palms towards you. Easier than a pull-up and kinder to the shoulders.'),
-  E('straight-arm', 'Straight-arm pulldown', 'back', '', 'machine', 5, 'Arms straight, sweep the bar to the thighs. All lats, no biceps.'),
+  E('straight-arm', 'Straight-arm pulldown', 'back', '', 'cable', 5, 'Arms straight, sweep the bar to the thighs. All lats, no biceps.'),
   E('shrug', 'Shrug', 'back', '', 'dumbbell', 5, 'Lift the shoulders straight up, pause, lower. No rolling.'),
   E('curl', 'Barbell curl', 'biceps', 'forearms', 'barbell', 5, 'Elbows at the ribs, curl without swinging, lower slowly.'),
   E('db-curl', 'Dumbbell curl', 'biceps', 'forearms', 'dumbbell', 2.5, 'Curl one arm or both, turning the palm up as you go.'),
   E('hammer-curl', 'Hammer curl', 'biceps', 'forearms', 'dumbbell', 2.5, 'Palms facing each other the whole way. Builds the forearm too.'),
   E('incline-curl', 'Incline curl', 'biceps', '', 'dumbbell', 2.5, 'Lie back on an incline so the arms hang behind you. A long, honest stretch.'),
-  E('preacher', 'Preacher curl', 'biceps', '', 'barbell', 5, 'Upper arms on the pad, curl to the chin, lower until nearly straight.'),
-  E('cable-curl', 'Cable curl', 'biceps', '', 'machine', 5, 'Constant tension from bottom to top. Squeeze at the top.'),
-  E('pushdown', 'Triceps pushdown', 'triceps', '', 'machine', 5, 'Elbows pinned to the ribs, push down until the arms are straight.'),
+  E('preacher', 'Preacher curl', 'biceps', '', 'ezbar', 5, 'Upper arms on the pad, curl to the chin, lower until nearly straight.'),
+  E('cable-curl', 'Cable curl', 'biceps', '', 'cable', 5, 'Constant tension from bottom to top. Squeeze at the top.'),
+  E('pushdown', 'Triceps pushdown', 'triceps', '', 'cable', 5, 'Elbows pinned to the ribs, push down until the arms are straight.'),
   E('overhead-triceps', 'Overhead triceps extension', 'triceps', '', 'dumbbell', 2.5, 'One dumbbell behind the head, elbows in, straighten the arms.'),
-  E('skullcrusher', 'Skullcrusher', 'triceps', '', 'barbell', 5, 'Lower the bar to the forehead with the elbows still, press back up.'),
+  E('skullcrusher', 'Skullcrusher', 'triceps', '', 'ezbar', 5, 'Lower the bar to the forehead with the elbows still, press back up.'),
   E('cgbp', 'Close-grip bench press', 'triceps', 'chest', 'barbell', 5, 'Hands shoulder width, elbows tucked, bar to the lower chest.'),
   E('kickback', 'Triceps kickback', 'triceps', '', 'dumbbell', 2.5, 'Hinge forward, upper arm level, straighten the elbow behind you.'),
   E('wrist-curl', 'Wrist curl', 'forearms', '', 'dumbbell', 2.5, 'Forearms on the thighs, curl the wrists up, lower slowly.'),
@@ -99,14 +109,14 @@ export const LIBRARY: Exercise[] = [
   E('side-plank', 'Side plank', 'core', '', 'bodyweight', 0, 'Stack the feet and lift the hips. One side, then the other.'),
   E('knee-raise', 'Hanging knee raise', 'core', '', 'bodyweight', 5, 'Hang still, lift the knees to the chest without swinging.'),
   E('leg-raise', 'Hanging leg raise', 'core', '', 'bodyweight', 5, 'Legs straight, lift to level. Stop the swing between reps.'),
-  E('cable-crunch', 'Cable crunch', 'core', '', 'machine', 5, 'Kneel below the rope, curl the ribs towards the hips.'),
+  E('cable-crunch', 'Cable crunch', 'core', '', 'cable', 5, 'Kneel below the rope, curl the ribs towards the hips.'),
   E('ab-wheel', 'Ab wheel rollout', 'core', 'shoulders', 'bodyweight', 0, 'Roll out as far as you can hold a flat back, pull back with the abs.'),
   E('deadbug', 'Dead bug', 'core', '', 'bodyweight', 0, 'On your back, opposite arm and leg out, low back glued to the floor.'),
-  E('pallof', 'Pallof press', 'core', '', 'machine', 5, 'Cable at the side, press straight out and resist the twist.'),
+  E('pallof', 'Pallof press', 'core', '', 'cable', 5, 'Cable at the side, press straight out and resist the twist.'),
   E('russian', 'Russian twist', 'core', '', 'bodyweight', 5, 'Lean back, rotate side to side under control.'),
   E('hip-airplane', 'Hip airplane', 'glutes', 'core', 'bodyweight', 0, 'Stand on one leg, hinge, and rotate the hips open and closed.'),
   E('sled-push', 'Sled push', 'quads', 'glutes, calves', 'machine', 10, 'Low arms, short steps, keep driving. Distance, not reps.'),
-  E('kb-swing', 'Kettlebell swing', 'glutes', 'hamstrings, core', 'dumbbell', 5, 'Hinge and snap the hips. The arms are rope, not levers.'),
+  E('kb-swing', 'Kettlebell swing', 'glutes', 'hamstrings, core', 'kettlebell', 5, 'Hinge and snap the hips. The arms are rope, not levers.'),
   E('clean', 'Power clean', 'quads', 'back, shoulders', 'barbell', 10, 'Pull from the floor, extend hard, catch the bar on the shoulders.'),
   E('snatch', 'Power snatch', 'shoulders', 'back, quads', 'barbell', 10, 'One pull from floor to overhead. Technique first, always.'),
   E('thruster', 'Thruster', 'quads', 'shoulders', 'barbell', 5, 'A front squat straight into an overhead press.'),
@@ -140,6 +150,47 @@ export const LIBRARY: Exercise[] = [
   E('wall-sit', 'Wall sit', 'quads', '', 'bodyweight', 0, 'Thighs level, back flat on the wall. Time.'),
   E('glute-ham', 'Glute-ham raise', 'hamstrings', 'glutes', 'machine', 5, 'Lower slowly, pull back with the hamstrings.'),
   E('chest-supported-fly', 'Machine rear fly', 'shoulders', 'back', 'machine', 5, 'Chest on the pad, open the arms wide, squeeze the shoulder blades.'),
+  // cables
+  E('cable-crossover', 'Low-to-high cable fly', 'chest', 'shoulders', 'cable', 5, 'Handles low, sweep up and together to chin height. Hits the upper chest.'),
+  E('single-cable-row', 'Single-arm cable row', 'back', 'biceps', 'cable', 5, 'One handle, pull to the hip with a slight turn of the torso.'),
+  E('cable-pullover', 'Cable pullover', 'back', 'core', 'cable', 5, 'Rope overhead, arms long, pull down to the thighs in an arc.'),
+  E('overhead-cable-ext', 'Overhead cable extension', 'triceps', '', 'cable', 5, 'Face away from the stack, rope behind the head, straighten the arms forward.'),
+  E('cable-hip-abduction', 'Cable hip abduction', 'glutes', '', 'cable', 5, 'Cuff on the outside ankle, sweep the leg out and back in slowly.'),
+  E('cable-woodchop', 'Cable woodchop', 'core', 'shoulders', 'cable', 5, 'Rotate from high to low across the body, arms long, hips steady.'),
+  E('cable-y-raise', 'Cable Y-raise', 'shoulders', 'back', 'cable', 5, 'Cables crossed, raise the arms into a Y above the head.'),
+  // kettlebells
+  E('kb-goblet', 'Kettlebell goblet squat', 'quads', 'glutes, core', 'kettlebell', 4, 'Hold the bell by the horns at the chest, sit between the knees.'),
+  E('kb-press', 'Kettlebell press', 'shoulders', 'triceps, core', 'kettlebell', 4, 'Bell in the rack, press overhead with the forearm vertical.'),
+  E('kb-row', 'Kettlebell row', 'back', 'biceps', 'kettlebell', 4, 'Hand on a bench, row the bell to the hip.'),
+  E('turkish-getup', 'Turkish get-up', 'core', 'shoulders, glutes', 'kettlebell', 4, 'From the floor to standing with the bell overhead, one slow step at a time.'),
+  E('kb-clean', 'Kettlebell clean', 'glutes', 'back, shoulders', 'kettlebell', 4, 'Swing the bell into the rack, let it roll around the wrist softly.'),
+  E('kb-snatch', 'Kettlebell snatch', 'shoulders', 'glutes, back', 'kettlebell', 4, 'One hip snap from between the legs to overhead, the bell floating over the hand.'),
+  E('kb-deadlift', 'Kettlebell deadlift', 'hamstrings', 'glutes', 'kettlebell', 4, 'Bell between the feet, hinge and stand. The first hinge to learn.'),
+  // bands
+  E('band-pull-apart', 'Band pull-apart', 'shoulders', 'back', 'band', 0, 'Arms straight in front, pull the band apart to the chest.'),
+  E('band-face-pull', 'Band face pull', 'shoulders', 'back', 'band', 0, 'Band anchored at face height, pull to the ears with the elbows high.'),
+  E('band-row', 'Band row', 'back', 'biceps', 'band', 0, 'Band anchored at chest height, row to the ribs.'),
+  E('band-curl', 'Band curl', 'biceps', '', 'band', 0, 'Stand on the band, curl up. Hardest at the top.'),
+  E('band-pushdown', 'Band pushdown', 'triceps', '', 'band', 0, 'Band over a bar, push down to straight arms.'),
+  E('band-walk', 'Lateral band walk', 'glutes', '', 'band', 0, 'Band above the knees, small steps sideways, knees out.'),
+  E('band-pallof', 'Band Pallof press', 'core', '', 'band', 0, 'Band at the side, press out and hold against the pull.'),
+  // the Smith machine
+  E('smith-squat', 'Smith machine squat', 'quads', 'glutes', 'smith', 10, 'Feet a little forward of the bar, sit straight down the track.'),
+  E('smith-bench', 'Smith machine bench press', 'chest', 'triceps', 'smith', 5, 'Bar to the lower chest along the track. Easy to push hard safely.'),
+  E('smith-incline', 'Smith incline press', 'chest', 'shoulders', 'smith', 5, 'Bench at thirty degrees under the bar, press to the upper chest.'),
+  E('smith-ohp', 'Smith shoulder press', 'shoulders', 'triceps', 'smith', 5, 'Seated, bar from the chin to straight arms.'),
+  E('smith-rdl', 'Smith Romanian deadlift', 'hamstrings', 'glutes', 'smith', 10, 'Hinge with the bar on its track; all the stretch, less balancing.'),
+  E('smith-calf', 'Smith calf raise', 'calves', '', 'smith', 10, 'Toes on a plate, heels hanging, rise high and pause.'),
+  // the trap bar
+  E('trapbar-row', 'Trap bar row', 'back', 'biceps', 'trapbar', 5, 'Stand inside, hinge, row the handles to the ribs with a neutral grip.'),
+  E('trapbar-carry', 'Trap bar carry', 'forearms', 'core, traps', 'trapbar', 10, 'Stand up with it and walk. Heavier than dumbbells allow.'),
+  E('trapbar-jump', 'Trap bar jump', 'quads', 'glutes, calves', 'trapbar', 5, 'Light load, dip and jump, land soft. For power, not tiredness.'),
+  // the EZ bar
+  E('ez-curl', 'EZ-bar curl', 'biceps', 'forearms', 'ezbar', 5, 'Angled grip is easier on the wrists. Elbows still, curl and lower slowly.'),
+  E('ez-skull', 'EZ-bar skullcrusher', 'triceps', '', 'ezbar', 5, 'Lower behind the head for a longer stretch than to the forehead.'),
+  E('ez-upright', 'EZ-bar upright row', 'shoulders', 'back', 'ezbar', 5, 'Wide grip, pull to the lower chest, elbows leading.'),
+  E('ez-reverse-curl', 'EZ-bar reverse curl', 'forearms', 'biceps', 'ezbar', 5, 'Palms down on the angled grip. Forearms burn early.'),
+  E('ez-pullover', 'EZ-bar pullover', 'back', 'chest', 'ezbar', 5, 'Lie across a bench, lower the bar behind the head in an arc, pull back over.'),
 ];
 
 export const MUSCLES = [
@@ -156,4 +207,28 @@ export const MUSCLES = [
   'core',
 ];
 
-export const GEARS: Gear[] = ['barbell', 'dumbbell', 'machine', 'bodyweight'];
+export const GEARS: Gear[] = [
+  'barbell',
+  'dumbbell',
+  'machine',
+  'cable',
+  'kettlebell',
+  'band',
+  'smith',
+  'trapbar',
+  'ezbar',
+  'bodyweight',
+];
+
+export const GEAR_NAMES: Record<Gear, string> = {
+  barbell: 'barbell',
+  dumbbell: 'dumbbells',
+  machine: 'machines',
+  cable: 'cables',
+  kettlebell: 'kettlebells',
+  band: 'bands',
+  smith: 'Smith machine',
+  trapbar: 'trap bar',
+  ezbar: 'EZ bar',
+  bodyweight: 'bodyweight',
+};

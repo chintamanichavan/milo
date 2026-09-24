@@ -69,9 +69,14 @@ export const REP_PRESETS: { name: string; low: number; high: number }[] = [
 export const byMuscle = (muscle: string): Exercise[] =>
   LIBRARY.filter((e) => e.muscle === muscle);
 
-/** same muscle first, then same equipment — for swapping an exercise */
-export function alternatives(exercise: Exercise, limit = 8): Exercise[] {
-  return LIBRARY.filter((e) => e.id !== exercise.id && e.muscle === exercise.muscle)
+/** same muscle first, then same equipment — and only what this gym has in it */
+export function alternatives(exercise: Exercise, limit = 8, equipment?: Gear[]): Exercise[] {
+  return LIBRARY.filter(
+    (e) =>
+      e.id !== exercise.id &&
+      e.muscle === exercise.muscle &&
+      (!equipment || e.gear === 'bodyweight' || equipment.includes(e.gear)),
+  )
     .sort((a, b) => Number(b.gear === exercise.gear) - Number(a.gear === exercise.gear))
     .slice(0, limit);
 }

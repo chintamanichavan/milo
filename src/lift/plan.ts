@@ -11,6 +11,8 @@ export interface Answers {
   experience: Experience;
   kit: Kit;
   minutes: number;
+  /** what the active gym has; when given, it decides instead of the kit */
+  equipment?: string[];
 }
 
 export interface GeneratedPlan {
@@ -24,26 +26,27 @@ export interface GeneratedPlan {
 }
 
 const PICKS: Record<string, string[]> = {
-  squat: ['squat', 'front-squat', 'goblet-squat', 'leg-press', 'split-squat', 'wall-sit'],
-  hinge: ['deadlift', 'rdl', 'trap-bar', 'hip-hinge', 'glute-bridge', 'back-extension'],
-  push: ['bench', 'incline-bench', 'db-bench', 'ohp', 'db-press', 'pushup', 'pike-pushup'],
-  pull: ['row', 'pulldown', 'db-row', 'cable-row', 'chinup', 'inverted-row'],
-  shoulder: ['lateral-raise', 'face-pull', 'rear-delt-fly', 'pike-pushup'],
-  arms: ['db-curl', 'pushdown', 'hammer-curl', 'overhead-triceps', 'bench-dip'],
-  core: ['plank', 'knee-raise', 'cable-crunch', 'ab-wheel', 'hollow-hold'],
-  calves: ['calf-raise', 'seated-calf', 'calf-jump'],
+  squat: ['squat', 'front-squat', 'smith-squat', 'goblet-squat', 'kb-goblet', 'leg-press', 'split-squat', 'wall-sit'],
+  hinge: ['deadlift', 'rdl', 'trap-bar', 'smith-rdl', 'kb-deadlift', 'hip-hinge', 'glute-bridge', 'back-extension'],
+  push: ['bench', 'incline-bench', 'smith-bench', 'db-bench', 'ohp', 'db-press', 'kb-press', 'pushup', 'pike-pushup'],
+  pull: ['row', 'pulldown', 'db-row', 'cable-row', 'kb-row', 'band-row', 'chinup', 'inverted-row'],
+  shoulder: ['lateral-raise', 'face-pull', 'band-face-pull', 'rear-delt-fly', 'band-pull-apart', 'pike-pushup'],
+  arms: ['db-curl', 'pushdown', 'ez-curl', 'hammer-curl', 'band-curl', 'overhead-triceps', 'band-pushdown', 'bench-dip'],
+  core: ['plank', 'knee-raise', 'cable-crunch', 'band-pallof', 'ab-wheel', 'hollow-hold'],
+  calves: ['calf-raise', 'seated-calf', 'smith-calf', 'calf-jump'],
 };
 
-const allowed = (kit: Kit) => (id: string): boolean => {
+const allowed = (kit: Kit, equipment?: string[]) => (id: string): boolean => {
   const exercise = LIBRARY.find((e) => e.id === id);
   if (!exercise) return false;
+  if (equipment) return exercise.gear === 'bodyweight' || equipment.includes(exercise.gear);
   if (kit === 'gym') return true;
   if (kit === 'dumbbells') return exercise.gear === 'dumbbell' || exercise.gear === 'bodyweight';
   return exercise.gear === 'bodyweight';
 };
 
-const pick = (slot: keyof typeof PICKS, kit: Kit, offset = 0): string => {
-  const options = PICKS[slot].filter(allowed(kit));
+const pick = (slot: keyof typeof PICKS, kit: Kit, offset = 0, equipment?: string[]): string => {
+  const options = PICKS[slot].filter(allowed(kit, equipment));
   return (options.length ? options : PICKS[slot])[offset % Math.max(1, options.length)];
 };
 
@@ -60,7 +63,7 @@ const sizeFor = (minutes: number): number =>
 function makeItems(slots: (keyof typeof PICKS)[], answers: Answers, offset: number): RoutineItem[] {
   const { low, high, sets, rest, rpe } = RANGES[answers.goal];
   return slots.map((slot, i) =>
-    item(pick(slot, answers.kit, offset + i), sets, low, high, { restSec: rest, rpe }),
+    item(pick(slot, answers.kit, offset + i, answers.equipment), sets, low, high, { restSec: rest, rpe }),
   );
 }
 

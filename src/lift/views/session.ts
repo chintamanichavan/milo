@@ -4,6 +4,8 @@ import { sheet } from '../../ui/sheet';
 import { setText } from '../../ui/dom';
 import { clock } from '../../ui/time';
 import { toast } from '../../ui/toast';
+import { ratingHtml } from '../evaluate';
+import { GEAR_NAMES } from '../library';
 import { alternatives, type RoutineItem } from '../data';
 import { warmupSets } from '../plan';
 import { findPrs } from '../records';
@@ -23,6 +25,7 @@ import {
   volumeOf,
   type Active,
   type LiftState,
+  activeGym,
 } from '../store';
 
 const TYPES: { id: SetType; label: string; hint: string }[] = [
@@ -97,6 +100,7 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
         <span class="tag"><a class="tap" href="#/lift">${routine.name}</a>${
           state.settings.deloadNext ? ' · deload' : ''
         }</span>
+        <button class="link tap gym-chip" id="gym">${activeGym(state).name}</button>
         <span class="tag mono" id="clock">0:00</span>
         <button class="link tap" id="finish">Finish</button>
       </header>
@@ -275,8 +279,19 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
             : ''
         }
         ${changes ? `<ul class="changes">${changes}</ul>` : '<p class="say">Same weights next time — chase the reps.</p>'}
+        <div class="chips">
+          <button class="chip tap" id="card">share a card</button>
+          <button class="chip tap" id="copyText">copy as text</button>
+        </div>
         <a class="big tap" href="#/lift">Back to lift</a>
       </section>`;
+    const saved = state.sessions[state.sessions.length - 1];
+    root.querySelector('#card')!.addEventListener('click', () =>
+      void import('./more').then(({ shareSession }) => shareSession(loadLift(), saved)),
+    );
+    root.querySelector('#copyText')!.addEventListener('click', () =>
+      void import('./more').then(({ copySession }) => copySession(loadLift(), saved)),
+    );
   }
 
   drawList();
@@ -341,10 +356,11 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
     if (el.closest('[data-swap]')) {
       const host = sheet(
         `Swap ${ex.name}`,
-        `<div class="cards">${alternatives(ex)
+        `<p class="line sub">What ${activeGym(state).name} has, same muscle first.</p>
+         <div class="cards swap-cards">${alternatives(ex, 8, activeGym(state).equipment)
           .map(
             (a) => `<button class="card tap" data-alt="${a.id}">
-              <b>${a.name}</b><span class="tag">${a.muscle} · ${a.gear}</span></button>`,
+              <b>${a.name}</b><span class="tag">${a.muscle} · ${GEAR_NAMES[a.gear]}</span>${ratingHtml(a)}</button>`,
           )
           .join('')}</div>
          <label class="sw tap"><input type="checkbox" id="forever"><span>Keep it in the routine, not just today</span></label>`,
@@ -398,6 +414,16 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
   });
 
   root.querySelector<HTMLElement>('#finish')!.addEventListener('click', finish);
+  root.querySelector<HTMLElement>('#gym')!.addEventListener('click', () =>
+    void import('./more').then(({ gymSwitcher }) =>
+      gymSwitcher(() => {
+        state = loadLift();
+        state.active = active;
+        root.querySelector<HTMLElement>('#gym')!.textContent = activeGym(state).name;
+        drawList();
+      }),
+    ),
+  );
   root.querySelector<HTMLElement>('#skip')!.addEventListener('click', stopRest);
   root.querySelector<HTMLElement>('#plus')!.addEventListener('click', () => {
     restEnd += 30_000;

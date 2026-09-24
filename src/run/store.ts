@@ -45,6 +45,8 @@ export interface Settings {
   programme: string;
   /** how loud the coach is, 0–1, apart from whatever music is playing */
   voiceVolume: number;
+  /** the app's accent colour */
+  accent?: string;
 }
 
 /** One-shot moments: a grid that fills in, a hint shown once. */

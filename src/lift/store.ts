@@ -1,4 +1,4 @@
-import { DEFAULT_ROUTINES, LIBRARY, REST_DEFAULT, type Exercise, type Routine } from './data';
+import { DEFAULT_ROUTINES, LIBRARY, REST_DEFAULT, type Exercise, type Gear, type Routine } from './data';
 import type { SetLog } from './progression';
 
 export interface Entry {
@@ -30,11 +30,25 @@ export interface Measurement {
 
 export type Units = 'lb' | 'kg';
 
+/** a place you train, with what it has in it */
+export interface Gym {
+  id: string;
+  name: string;
+  equipment: Gear[];
+  barLb: number;
+  plates: number[];
+}
+
 export interface LiftSettings {
   units: Units;
   restSec: number;
+  /** the bar and plates of the gym you are in; kept in step with it */
   barLb: number;
   plates: number[];
+  gyms: Gym[];
+  gymId: string;
+  /** a photo of your own for any exercise */
+  images?: Record<string, string>;
   /** generated programme, if any */
   planId?: string;
   planWeek?: number;
@@ -61,12 +75,35 @@ export interface LiftState {
 export { LIFT_KEY } from '../keys';
 import { FUEL_KEY, LIFT_KEY } from '../keys';
 
+export const ALL_GEAR: Gear[] = [
+  'barbell',
+  'dumbbell',
+  'machine',
+  'cable',
+  'kettlebell',
+  'band',
+  'smith',
+  'trapbar',
+  'ezbar',
+  'bodyweight',
+];
+
 const defaults = (): LiftSettings => ({
   units: 'lb',
   restSec: 90,
   barLb: 45,
   plates: [45, 35, 25, 10, 5, 2.5],
+  gyms: [],
+  gymId: 'main',
 });
+
+/** the gym you are training in; everyone has at least one */
+export function activeGym(state: LiftState): Gym {
+  return state.settings.gyms.find((g) => g.id === state.settings.gymId) ?? state.settings.gyms[0];
+}
+
+/** can this gym do this exercise? */
+export const gymHas = (gym: Gym, gear: Gear): boolean => gear === 'bodyweight' || gym.equipment.includes(gear);
 
 const blank = (): LiftState => ({
   routines: DEFAULT_ROUTINES.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
@@ -82,16 +119,30 @@ const blank = (): LiftState => ({
 export function loadLift(): LiftState {
   try {
     const raw = localStorage.getItem(LIFT_KEY);
-    if (!raw) return blank();
+    if (!raw) return withGym(blank());
     const parsed = JSON.parse(raw) as Partial<LiftState>;
-    return {
+    const state = {
       ...blank(),
       ...parsed,
       settings: { ...defaults(), ...(parsed.settings ?? {}) },
     };
+    return withGym(state);
   } catch {
-    return blank();
+    return withGym(blank());
   }
+}
+
+/** the first gym is the one you already had: its bar, its plates, everything in it */
+function withGym(state: LiftState): LiftState {
+  if (!state.settings.gyms.length)
+    state.settings.gyms = [
+      { id: 'main', name: 'Main gym', equipment: [...ALL_GEAR], barLb: state.settings.barLb, plates: [...state.settings.plates] },
+    ];
+  const gym = activeGym(state);
+  state.settings.gymId = gym.id;
+  state.settings.barLb = gym.barLb;
+  state.settings.plates = gym.plates;
+  return state;
 }
 
 export function saveLift(state: LiftState): void {
@@ -170,7 +221,11 @@ export function daysAgo(iso: string): string {
 export function setLiftSettings(patch: Partial<LiftSettings>): LiftSettings {
   const state = loadLift();
   state.settings = { ...state.settings, ...patch };
-  saveLift(state);
+  // the bar and the plates belong to the gym you are standing in
+  const gym = activeGym(state);
+  if (patch.barLb !== undefined) gym.barLb = patch.barLb;
+  if (patch.plates) gym.plates = patch.plates;
+  saveLift(withGym(state));
   return state.settings;
 }
 
@@ -295,4 +350,26 @@ export function plates(totalLb: number, barLb: number, available: number[]): num
     }
   }
   return out;
+}
+
+export function saveGym(gym: Gym): void {
+  const state = loadLift();
+  const at = state.settings.gyms.findIndex((g) => g.id === gym.id);
+  if (at >= 0) state.settings.gyms[at] = gym;
+  else state.settings.gyms.push(gym);
+  saveLift(withGym(state));
+}
+
+export function switchGym(id: string): void {
+  const state = loadLift();
+  state.settings.gymId = id;
+  saveLift(withGym(state));
+}
+
+export function deleteGym(id: string): void {
+  const state = loadLift();
+  if (state.settings.gyms.length < 2) return;
+  state.settings.gyms = state.settings.gyms.filter((g) => g.id !== id);
+  if (state.settings.gymId === id) state.settings.gymId = state.settings.gyms[0].id;
+  saveLift(withGym(state));
 }
