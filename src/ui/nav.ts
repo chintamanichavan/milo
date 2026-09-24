@@ -98,8 +98,32 @@ function openMore(): void {
         .join('')}
       <a class="card tap" href="#/run/settings">${ICONS.settings}<b>Settings</b><span class="tag">everything else</span></a>
     </div>
-    <p class="muted mono" style="margin-top:16px;font-size:12px">build ${__BUILD__} · <img src="/apple-touch-icon-v4.png" alt="" width="18" height="18" style="vertical-align:middle;border-radius:4px"> icon v4 (llama)</p>`,
+    <p class="muted mono" style="margin-top:16px;font-size:12px">build ${__BUILD__} · <img src="/apple-touch-icon-v7.png" alt="" width="18" height="18" style="vertical-align:middle;border-radius:4px"> icon v7</p>
+    <button class="chip tap" id="checkUpdate" type="button" style="margin-top:8px">Check for updates</button>
+    <p class="muted" id="updateNote" style="font-size:13px;margin:6px 0 0"></p>`,
   );
+  {
+    const note = host.querySelector<HTMLElement>('#updateNote')!;
+    const btn = host.querySelector<HTMLButtonElement>('#checkUpdate')!;
+    type Upd = { ready(): boolean; check(): Promise<'ready' | 'current' | 'offline'>; apply(): void };
+    const upd = (window as unknown as { __miloUpdate?: Upd }).__miloUpdate;
+    const showReady = (): void => {
+      note.textContent = 'A new version is ready.';
+      btn.textContent = 'Restart into it';
+      btn.onclick = () => upd?.apply();
+    };
+    if (upd?.ready()) showReady();
+    else
+      btn.onclick = async () => {
+        btn.disabled = true;
+        note.textContent = 'Looking…';
+        const r = await upd?.check();
+        btn.disabled = false;
+        if (r === 'ready') showReady();
+        else note.textContent = r === 'offline' ? 'You are offline.' : 'You have the latest build.';
+      };
+    document.addEventListener('milo:update-ready', showReady, { once: true });
+  }
   host.querySelector('#morePour')!.addEventListener('click', async (ev) => {
     ev.stopPropagation();
     // the water chunk only loads when someone actually pours
