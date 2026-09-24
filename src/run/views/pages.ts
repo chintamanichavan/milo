@@ -243,12 +243,7 @@ export function certificateView(root: HTMLElement): () => void {
         font-size="20">ran for thirty minutes without stopping</text>
       <text x="300" y="286" text-anchor="middle" fill="#7d888f" font-family="ui-monospace,monospace"
         font-size="14" letter-spacing="3">${when.toUpperCase()}</text>
-      <g transform="translate(270 316) scale(0.12)" fill="none" stroke="#c5f74f" stroke-width="24"
-        stroke-linecap="round" stroke-linejoin="round">
-        <path d="M132 384 L132 208 C132 158 112 128 76 112"/>
-        <path d="M380 384 L380 208 C380 158 400 128 436 112"/>
-        <path d="M132 208 L256 336 L380 208"/>
-      </g>
+      <image href="/icon-v7.svg" x="270" y="316" width="61" height="61"/>
     </svg>`;
 
   root.innerHTML = shell(

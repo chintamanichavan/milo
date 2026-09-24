@@ -1,11 +1,8 @@
 /** The app icon: an M whose outer stems curl like a bull's horns. */
-export function miloMark(size = 20, stroke = 34): string {
-  return `<svg class="mark" viewBox="0 0 512 512" width="${size}" height="${size}" aria-hidden="true"
-    fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M132 384 L132 208 C132 158 112 128 76 112"/>
-    <path d="M380 384 L380 208 C380 158 400 128 436 112"/>
-    <path d="M132 208 L256 336 L380 208"/>
-  </svg>`;
+export function miloMark(size = 20, _stroke = 34): string {
+  // the llama from the app icon, so the header matches the home screen
+  return `<img class="mark" src="/icon-v7.svg" width="${size}" height="${size}" alt="" aria-hidden="true"
+    style="border-radius:${Math.round(size * 0.22)}px;vertical-align:middle">`;
 }
 
 /** Small watch face, for the interval-recipe disclosure. */
