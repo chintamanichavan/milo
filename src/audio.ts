@@ -36,7 +36,10 @@ const PATTERNS: Record<string, Note[]> = {
 export function beep(pattern: keyof typeof PATTERNS, always = false): void {
   if (!ctx || (!always && !load().settings.beep)) return;
   const t0 = ctx.currentTime + 0.02;
-  for (const [freq, startMs, lenMs, gainTo = 0.28] of PATTERNS[pattern]) {
+  // the cue volume scales the beeps too; the music is the phone's business
+  const level = Math.max(0.02, load().settings.voiceVolume ?? 1);
+  for (const [freq, startMs, lenMs, peak = 0.28] of PATTERNS[pattern]) {
+    const gainTo = Math.max(0.0002, peak * level);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const start = t0 + startMs / 1000;
@@ -65,7 +68,7 @@ export function say(text: string, persona?: Voice): void {
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = persona?.rate ?? 1;
   utter.pitch = persona?.pitch ?? 1;
-  utter.volume = 1;
+  utter.volume = Math.min(1, Math.max(0, load().settings.voiceVolume ?? 1));
   const wanted = persona ? voices?.[persona.id] : undefined;
   if (wanted) {
     const match = speechSynthesis.getVoices().find((v) => v.voiceURI === wanted);

@@ -92,6 +92,14 @@ export function doneView(root: HTMLElement): () => void {
         <input class="dest" id="note" placeholder="a note, if you want one">
       </div>
       ${
+        result.cues?.length
+          ? `<details class="cuelog"><summary class="tag">What the coach said · ${result.cues.length}</summary>
+              <ol>${result.cues
+                .map(([sec, line]) => `<li><span class="mono">${clock(sec)}</span>${line}</li>`)
+                .join('')}</ol></details>`
+          : ''
+      }
+      ${
         earned && !graduating
           ? `<div class="earn">${miloMark(48, 30)}<span>Week ${week} finished. Badge earned!</span></div>`
           : ''

@@ -346,6 +346,10 @@ export function runSettingsView(root: HTMLElement): () => void {
       <label class="sw tap"><input type="checkbox" id="setBeep" ${s.beep ? 'checked' : ''}><span>Beeps</span></label>
       <label class="sw tap"><input type="checkbox" id="setBeepsOnly" ${s.beepsOnly ? 'checked' : ''}><span>Beeps only — silence the voice, for running without headphones</span></label>
       <label class="sw tap"><input type="checkbox" id="setMetro" ${s.metronome ? 'checked' : ''}><span>Cadence clicks on rhythm runs</span></label>
+      <label class="field"><span class="tag">Coach volume · <b class="mono" id="volNum">${Math.round((s.voiceVolume ?? 1) * 100)}%</b></span>
+        <input type="range" class="slider" id="voiceVolume" min="0" max="100" step="5" value="${Math.round((s.voiceVolume ?? 1) * 100)}"
+          aria-label="Coach volume"></label>
+      <p class="line sub">Cues and beeps only — your music keeps its own volume. <button class="link tap" id="hear">Hear it</button></p>
     </div>
     <div class="panel">
       <p class="tag">Distance</p>
@@ -421,6 +425,17 @@ export function runSettingsView(root: HTMLElement): () => void {
   toggle('setBeep', 'beep');
   toggle('setBeepsOnly', 'beepsOnly');
   toggle('setMetro', 'metronome');
+  const volume = root.querySelector<HTMLInputElement>('#voiceVolume')!;
+  volume.addEventListener('input', () => {
+    root.querySelector('#volNum')!.textContent = `${volume.value}%`;
+  });
+  volume.addEventListener('change', () => setSettings({ voiceVolume: Number(volume.value) / 100 }));
+  root.querySelector('#hear')!.addEventListener('click', async () => {
+    const { beep, say, unlockAudio } = await import('../../audio');
+    unlockAudio();
+    beep('run');
+    say('This is how loud I will be.', personaById(load().settings.coach));
+  });
   toggle('setGps', 'gps');
   toggle('setTread', 'treadmill');
 

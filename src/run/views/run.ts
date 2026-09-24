@@ -71,6 +71,7 @@ export function runView(
         <div class="kind" id="kind">WALK</div>
         <div class="count" id="count">5:00</div>
         <div class="next" id="next"></div>
+        <p class="caption" id="caption" aria-hidden="true"></p>
       </div>
       <footer class="run-foot">
         <div class="track">
@@ -105,6 +106,9 @@ export function runView(
   const hintEl = root.querySelector<HTMLElement>('#hint')!;
   const digitEl = root.querySelector<HTMLElement>('#digit')!;
   const liveEl = root.querySelector<HTMLElement>('#live')!;
+  const captionEl = root.querySelector<HTMLElement>('#caption')!;
+  /** everything the coach said, with when, for the transcript after the run */
+  const cues: [number, string][] = [];
 
   const openedAt = now();
   const startedAt = openedAt + COUNT_IN_MS;
@@ -119,6 +123,15 @@ export function runView(
   let lastPaint = 0;
 
   const elapsed = (): number => ((pausedAt ?? now()) - startedAt - pausedFor) / 1000;
+
+  /** heard, captioned on screen, and written down */
+  const speak = (line: string): void => {
+    say(line, persona);
+    liveEl.textContent = line;
+    captionEl.textContent = line;
+    replay(captionEl, 'said');
+    cues.push([Math.max(0, Math.round(elapsed())), line]);
+  };
 
   if (tracker && !tracker.start(() => paintDistance())) distEl.textContent = 'no location';
 
@@ -139,9 +152,7 @@ export function runView(
       replay(digitEl, 'beat');
       if (want === 'GO') {
         beep('go');
-        const line = cueFor(0);
-        say(line, persona);
-        liveEl.textContent = line;
+        speak(cueFor(0));
         cued = 0;
         if (segs[0].bpm && settings.metronome) metronome(segs[0].bpm);
       } else beep('tick');
@@ -192,9 +203,7 @@ export function runView(
       replay(kindEl, 'swap');
       replay(countEl, 'pulse');
       beep(seg.kind);
-      const line = cueFor(spot.index);
-      say(line, persona);
-      liveEl.textContent = line;
+      speak(cueFor(spot.index));
       tracker?.setKind(seg.kind, 0);
       if (spot.index === segs.length - 1)
         hintEl.innerHTML = '<a class="tap" href="#/run/tips">cool-down stretches →</a>';
@@ -211,9 +220,7 @@ export function runView(
 
     if (!halfwaySaid && e >= plan.totalSec / 2) {
       halfwaySaid = true;
-      const line = cueLine(persona, 'halfway');
-      say(line, persona);
-      liveEl.textContent = line;
+      speak(cueLine(persona, 'halfway'));
       replay(shimmerEl, 'shine');
     }
   }
@@ -223,9 +230,8 @@ export function runView(
     finished = true;
     stopMetronome();
     beep('done');
-    const line = partial ? 'Stopping here. Some is better than none.' : cueLine(persona, 'finish');
-    say(line, persona);
-    const extra: Partial<CompletedRun> = { prog: programme };
+    speak(partial ? 'Stopping here. Some is better than none.' : cueLine(persona, 'finish'));
+    const extra: Partial<CompletedRun> = { prog: programme, cues };
     if (tracker) {
       const summary = tracker.stop();
       if (summary.distanceKm > 0.02) {

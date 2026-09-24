@@ -23,6 +23,8 @@ export interface CompletedRun {
   feel?: 'easy' | 'ok' | 'hard';
   note?: string;
   manual?: boolean;
+  /** what the coach said, [seconds in, words] */
+  cues?: [number, string][];
 }
 
 export type Units = 'mi' | 'km';
@@ -47,6 +49,8 @@ export interface Settings {
   reminder: Reminder;
   graduateName?: string;
   programme: string;
+  /** how loud the coach is, 0–1, apart from whatever music is playing */
+  voiceVolume: number;
 }
 
 /** One-shot moments: a grid that fills in, a hint shown once. */
@@ -78,6 +82,7 @@ const defaults = (): Settings => ({
   metronome: true,
   reminder: { days: [0, 3, 5], time: '07:30' },
   programme: 'c25k',
+  voiceVolume: 1,
 });
 
 const blank = (): State => ({
