@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="25%" r="85%"><stop offset="0" stop-color="#1a2013"/><stop offset="1" stop-color="#06070a"/></radialGradient>
+    <linearGradient id="lime" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ff7a"/><stop offset="1" stop-color="#9fd626"/></linearGradient>
+    <linearGradient id="lime2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b5e83a"/><stop offset="1" stop-color="#7fb516"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g fill="url(#lime)">
+    <!-- broad horns -->
+    <path d="M62 120 C36 200 80 276 166 292 L184 254 C126 240 104 190 118 138 Z"/>
+    <path d="M450 120 C476 200 432 276 346 292 L328 254 C386 240 408 190 394 138 Z"/>
+    <!-- wide rounded head -->
+    <path d="M166 292 C166 236 206 206 256 206 C306 206 346 236 346 292 L346 330 C346 380 304 418 256 418 C208 418 166 380 166 330 Z"/>
+    <!-- ears -->
+    <path d="M166 300 L120 284 L134 330 Z"/><path d="M346 300 L392 284 L378 330 Z"/>
+  </g>
+  <!-- muzzle band -->
+  <path fill="url(#lime2)" d="M198 352 C198 340 224 334 256 334 C288 334 314 340 314 352 L314 366 C314 396 288 418 256 418 C224 418 198 396 198 366 Z"/>
+  <!-- eyes -->
+  <ellipse cx="220" cy="300" rx="14" ry="10" fill="#0b0d0f"/><ellipse cx="292" cy="300" rx="14" ry="10" fill="#0b0d0f"/>
+  <!-- nostrils, soft -->
+  <circle cx="240" cy="382" r="7" fill="#0b0d0f" opacity="0.7"/><circle cx="272" cy="382" r="7" fill="#0b0d0f" opacity="0.7"/>
+</svg>
