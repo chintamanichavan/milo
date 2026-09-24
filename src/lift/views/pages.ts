@@ -1,4 +1,7 @@
 import { miloMark } from '../../badge';
+import { bindBodyPanels, bodyPanels } from '../../body/views';
+import { loadFuel } from '../../fuel/store';
+import { trend as fuelTrend } from '../../fuel/tdee';
 import { barList, columns, lineChart } from '../../ui/chart';
 import { sheet } from '../../ui/sheet';
 import { clock, dayKey } from '../../ui/time';
@@ -9,7 +12,6 @@ import { generatePlan, isDeloadWeek, phaseFor, type Answers } from '../plan';
 import { recordsFor, standardFor } from '../records';
 import {
   addCustomExercise,
-  addMeasurement,
   deleteRoutine,
   deleteSession,
   exerciseById,
@@ -289,84 +291,28 @@ export function liftHistoryView(root: HTMLElement): () => void {
   return () => {};
 }
 
-/* ---------- 19. measurements ---------- */
-
-const MEASURES: { key: keyof MeasureKeys; label: string; unit: string }[] = [
-  { key: 'weightLb', label: 'Body weight', unit: 'lb' },
-  { key: 'bodyFat', label: 'Body fat', unit: '%' },
-  { key: 'chest', label: 'Chest', unit: 'in' },
-  { key: 'waist', label: 'Waist', unit: 'in' },
-  { key: 'hips', label: 'Hips', unit: 'in' },
-  { key: 'arm', label: 'Arm', unit: 'in' },
-  { key: 'thigh', label: 'Thigh', unit: 'in' },
-];
-
-interface MeasureKeys {
-  weightLb?: number;
-  bodyFat?: number;
-  chest?: number;
-  waist?: number;
-  hips?: number;
-  arm?: number;
-  thigh?: number;
-}
+/* ---------- 19 + 109 + 110. the body, shared with Fuel ---------- */
 
 export function bodyView(root: HTMLElement): () => void {
   const state = loadLift();
   const units = state.settings.units;
-  const series = (key: keyof MeasureKeys): number[] =>
-    state.measurements.map((m) => m[key]).filter((v): v is number => typeof v === 'number');
-
-  const weights = series('weightLb');
-  const trend: number[] = weights.map((_, i) => {
-    const window = weights.slice(Math.max(0, i - 6), i + 1);
-    return window.reduce((s, v) => s + v, 0) / window.length;
-  });
-
-  root.innerHTML = shell(
-    'body',
-    `<div class="hero">
-      <p class="tag section">Body</p>
-      <h1>${weights.length ? showWeight(trendWeight(state), units) : '—'}<span><i> · </i>trend weight</span></h1>
-      <p class="line sub">${state.measurements.length} entries · a seven-day average smooths the noise</p>
-      <button class="big tap" data-done="1" id="addM">LOG A MEASUREMENT</button>
-    </div>
-    <div class="panel">
-      <p class="tag">Weight</p>
-      ${lineChart(trend.length ? trend : [], 'trend weight')}
-    </div>
-    ${MEASURES.filter((m) => m.key !== 'weightLb')
-      .map((m) => {
-        const values = series(m.key);
-        return values.length
-          ? `<div class="panel"><p class="tag">${m.label}</p>${lineChart(values, `${m.label} (${m.unit})`)}</div>`
-          : '';
-      })
-      .join('')}`,
-  );
-
-  root.querySelector('#addM')!.addEventListener('click', () => {
-    const host = sheet(
-      'New measurement',
-      `${MEASURES.map(
-        (m) => `<label class="field row"><span>${m.label} (${
-          m.key === 'weightLb' ? units : m.unit
-        })</span><input class="num" data-m="${m.key}" inputmode="decimal"></label>`,
-      ).join('')}
-       <button class="big tap" data-done="1" id="mSave">SAVE</button>`,
+  const fuel = loadFuel();
+  const line = fuelTrend(fuel.weights);
+  const draw = (): void => {
+    root.innerHTML = shell(
+      'body',
+      `<div class="hero">
+        <p class="tag section">Body</p>
+        <h1>${line.length ? showWeight(line[line.length - 1].lb, units) : '—'}<span><i> · </i>trend weight</span></h1>
+        <p class="line sub">Weight, measurements and photos are shared with Fuel — log them in either place.</p>
+        <div class="chips"><a class="chip tap" href="#/fuel/weight">+ weigh-in</a></div>
+      </div>
+      <div class="panel"><p class="tag">Weight</p>${lineChart(line.map((p) => p.lb), 'trend weight')}</div>
+      ${bodyPanels()}`,
     );
-    host.querySelector('#mSave')!.addEventListener('click', () => {
-      const entry: MeasureKeys & { date: string } = { date: new Date().toISOString() };
-      for (const m of MEASURES) {
-        const input = host.querySelector(`[data-m="${m.key}"]`) as HTMLInputElement;
-        const value = Number(input.value);
-        if (value > 0) entry[m.key] = m.key === 'weightLb' ? toLb(value, units) : value;
-      }
-      addMeasurement(entry);
-      bodyView(root);
-      toast('Logged');
-    });
-  });
+    bindBodyPanels(root, draw);
+  };
+  draw();
   return () => {};
 }
 

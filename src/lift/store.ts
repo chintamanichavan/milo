@@ -59,7 +59,7 @@ export interface LiftState {
 }
 
 export { LIFT_KEY } from '../keys';
-import { LIFT_KEY } from '../keys';
+import { FUEL_KEY, LIFT_KEY } from '../keys';
 
 const defaults = (): LiftSettings => ({
   units: 'lb',
@@ -225,8 +225,15 @@ export function addMeasurement(entry: Measurement): void {
 export const lastPerformed = (state: LiftState, routineId: string): Session | undefined =>
   [...state.sessions].reverse().find((s) => s.routineId === routineId);
 
-/** bodyweight now, smoothed a little, in pounds */
+/** bodyweight now, smoothed a little, in pounds: Fuel's scale first, old lift entries after */
 export function trendWeight(state: LiftState): number {
+  try {
+    const fuel = JSON.parse(localStorage.getItem(FUEL_KEY) ?? 'null') as { weights?: { lb: number }[] } | null;
+    const recent = (fuel?.weights ?? []).slice(-7);
+    if (recent.length) return recent.reduce((s, w) => s + w.lb, 0) / recent.length;
+  } catch {
+    /* fall back to the lift log */
+  }
   const recent = state.measurements.filter((m) => m.weightLb).slice(-7);
   if (recent.length === 0) return 0;
   return recent.reduce((s, m) => s + (m.weightLb ?? 0), 0) / recent.length;

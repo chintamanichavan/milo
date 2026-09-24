@@ -10,3 +10,4 @@ export const FUEL_KEY = 'c25k.fuel.v1';
 export const HABITS_KEY = 'c25k.habits.v1';
 export const WATER_KEY = 'c25k.water.v1';
 export const TABS_KEY = 'c25k.nav.v1';
+export const BODY_KEY = 'c25k.body.v1';
