@@ -1,7 +1,7 @@
 import { unlockAudio } from '../../audio';
 import { miloMark } from '../../badge';
 import { sheet } from '../../ui/sheet';
-import { airport, planRoute } from '../airports';
+import { airport, localTime, planRoute, surpriseRoute } from '../airports';
 import {
   boardingPass,
   nextRank,
@@ -21,6 +21,7 @@ import {
   loadFocus,
   recentLabels,
   setFocusSettings,
+  setNextFlight,
   streak,
   week,
   weekHours,
@@ -30,6 +31,72 @@ import { createSky, type Sky } from '../sky';
 import { editFlight, flightRows } from './logbook';
 
 const CHIPS = [25, 50, 90, 120];
+
+/* ---------- 120. the cabin: first, business, economy — each a kind of work ---------- */
+
+interface Cabin {
+  name: string;
+  work: string;
+  rows: [number, number];
+  letters: string;
+}
+
+const CABINS: Cabin[] = [
+  { name: 'First', work: 'deep work', rows: [1, 2], letters: 'AB EF' },
+  { name: 'Business', work: 'study', rows: [3, 6], letters: 'AB EF' },
+  { name: 'Economy', work: 'light work', rows: [7, 20], letters: 'ABC DEF' },
+];
+
+const cabinOf = (seat: string): Cabin => {
+  const row = Number.parseInt(seat, 10);
+  return CABINS.find((c) => row >= c.rows[0] && row <= c.rows[1]) ?? CABINS[2];
+};
+
+const placeOf = (seat: string): string => {
+  const letter = seat.replace(/\d+/g, '');
+  const { letters } = cabinOf(seat);
+  const row = letters.replace(' ', '');
+  if (letter === row[0] || letter === row[row.length - 1]) return 'window';
+  return letters.length === 5 || letter === 'C' || letter === 'D' ? 'aisle' : 'middle';
+};
+
+/** the pass's own seat, moved onto this aircraft's map */
+const validSeat = (seat: string): string => {
+  let row = Number.parseInt(seat, 10) || 12;
+  if (row > 20) row = 7 + (row % 14);
+  const { letters } = cabinOf(`${row}A`);
+  const letter = seat.replace(/[0-9]+/g, '');
+  return `${row}${letters.includes(letter) && letter !== ' ' ? letter : letters[0]}`;
+};
+
+const seatLine = (seat: string): string => {
+  const cabin = cabinOf(seat);
+  return `Seat ${seat} · ${placeOf(seat)} · ${cabin.name} — ${cabin.work}`;
+};
+
+/** a seat map with some seats already taken, the same ones for the same flight */
+function seatMap(flight: string, chosen: string): string {
+  let n = [...flight].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const taken = (): boolean => {
+    n = (n * 1103515245 + 12345) >>> 0;
+    return n % 5 < 2;
+  };
+  return `<div class="seatmap" id="seats" role="group" aria-label="seat map">${CABINS.map(
+    (cabin) => `<p class="tag seat-cabin">${cabin.name}<span>${cabin.work}</span></p>
+      ${Array.from({ length: cabin.rows[1] - cabin.rows[0] + 1 }, (_, i) => {
+        const row = cabin.rows[0] + i;
+        return `<div class="seat-row ${cabin.name.toLowerCase()}"><i class="mono">${row}</i>${[...cabin.letters]
+          .map((letter) => {
+            if (letter === ' ') return '<span class="seat-aisle"></span>';
+            const id = `${row}${letter}`;
+            const busy = id !== chosen && taken();
+            return `<button class="seat tap${id === chosen ? ' on' : ''}" data-seat="${id}" ${busy ? 'disabled' : ''}
+              aria-label="Seat ${id}, ${placeOf(id)}, ${cabin.name}${busy ? ', taken' : ''}">${letter}</button>`;
+          })
+          .join('')}</div>`;
+      }).join('')}`,
+  ).join('')}</div>`;
+}
 
 export function subNav(active: string): string {
   const link = (id: string, label: string): string =>
@@ -117,8 +184,11 @@ export function focusBoardView(root: HTMLElement): () => void {
         </div>
         <div class="preview">
           <div class="sky-host small" id="preview"></div>
-          <p class="tag route" id="routeLine">next · ${route.from.iata} → ${route.to.iata}
-            <span>${route.to.city} · ${route.km.toLocaleString('en-US')} km · ${route.band}</span></p>
+          <div class="route-row">
+            <p class="tag route" id="routeLine">next · ${route.from.iata} → ${route.to.iata}
+              <span>${route.to.city} · ${route.km.toLocaleString('en-US')} km · ${route.band}</span></p>
+            <button class="link tap" id="surprise" aria-label="Surprise me: a random destination">surprise me</button>
+          </div>
         </div>
         <div class="chips" id="lens">
           ${CHIPS.map(
@@ -164,8 +234,10 @@ export function focusBoardView(root: HTMLElement): () => void {
   const routeLine = root.querySelector<HTMLElement>('#routeLine')!;
   let sky: Sky | null = null;
 
-  const redrawRoute = (): void => {
-    route = planRoute(lastAirport(state), minutes, String(state.flights.length));
+  const redrawRoute = (surprise = false): void => {
+    route = surprise
+      ? surpriseRoute(lastAirport(state), minutes, route.to.iata)
+      : planRoute(lastAirport(state), minutes, String(state.flights.length));
     routeLine.innerHTML = `next · ${route.from.iata} → ${route.to.iata}
       <span>${route.to.city} · ${route.km.toLocaleString('en-US')} km · ${route.band}</span>`;
     void refreshSky();
@@ -198,6 +270,7 @@ export function focusBoardView(root: HTMLElement): () => void {
     const m = Number(customEl.value);
     if (m > 0) pick(m);
   });
+  root.querySelector('#surprise')!.addEventListener('click', () => redrawRoute(true));
   for (const chip of root.querySelectorAll<HTMLElement>('[data-label]'))
     chip.addEventListener('click', () => {
       destEl.value = chip.dataset.label ?? '';
@@ -208,23 +281,70 @@ export function focusBoardView(root: HTMLElement): () => void {
     const m = Math.min(300, Math.max(1, Math.round(minutes)));
     setFocusSettings({ defaultMin: m });
     const purpose = destEl.value.trim();
-    const pass = boardingPass(route.from, route.to, m, purpose);
-    const host = sheet(
-      'Boarding pass',
-      `<div class="pass" id="pass">
+    const flight = route;
+    const pass = boardingPass(flight.from, flight.to, m, purpose);
+    let seat = validSeat(pass.seat);
+    let cabin = cabinOf(seat);
+    const host = sheet('Check-in', '');
+    const body = host.querySelector<HTMLElement>('.sheet-body')!;
+    const title = host.querySelector<HTMLElement>('header .tag')!;
+    const arrives = localTime(flight.to, new Date(Date.now() + m * 60_000));
+
+    const gateStep = (): void => {
+      title.textContent = 'Check-in';
+      body.innerHTML = `<div class="gate">
+        <p class="tag">${pass.number} · ${aircraft === 'paper' ? 'paper plane' : aircraft}</p>
+        <div class="pass-route">
+          <div><b>${flight.from.iata}</b><span>${flight.from.city}</span></div>
+          <i class="pass-arrow">✈</i>
+          <div><b>${flight.to.iata}</b><span>${flight.to.city}</span></div>
+        </div>
+        <div class="gate-grid">
+          <div><span class="tag">departs</span><b>${pass.departs}</b></div>
+          <div><span class="tag">gate</span><b>${pass.gate}</b></div>
+          <div><span class="tag">boarding</span><b class="gate-now">now</b></div>
+          <div><span class="tag">flight time</span><b>${m}′</b></div>
+          <div><span class="tag">distance</span><b>${flight.km.toLocaleString('en-US')} km</b></div>
+          <div><span class="tag">arrives</span><b>${arrives}</b></div>
+        </div>
+        <p class="line sub">${flight.band} to ${flight.to.city}. Purpose: ${purpose || 'focus'}.</p>
+      </div>
+      <button class="big tap" id="checkin">CHECK IN</button>`;
+      body.querySelector('#checkin')!.addEventListener('click', seatStep);
+    };
+
+    const seatStep = (): void => {
+      title.textContent = 'Choose a seat';
+      body.innerHTML = `${seatMap(pass.number, seat)}
+        <p class="line seat-pick" id="seatPick">${seatLine(seat)}</p>
+        <button class="big tap" id="toPass">GET MY PASS</button>`;
+      body.querySelector('#seats')!.addEventListener('click', (ev) => {
+        const button = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-seat]');
+        if (!button || button.disabled) return;
+        seat = button.dataset.seat!;
+        cabin = cabinOf(seat);
+        for (const b of body.querySelectorAll('[data-seat]')) b.classList.toggle('on', b === button);
+        body.querySelector('#seatPick')!.textContent = seatLine(seat);
+      });
+      body.querySelector('#toPass')!.addEventListener('click', passStep);
+    };
+
+    const passStep = (): void => {
+      title.textContent = 'Boarding pass';
+      body.innerHTML = `<div class="pass" id="pass">
         <div class="pass-main">
           <p class="tag">${pass.number} · ${pass.departs}</p>
           <div class="pass-route">
-            <div><b>${route.from.iata}</b><span>${route.from.city}</span></div>
+            <div><b>${flight.from.iata}</b><span>${flight.from.city}</span></div>
             <i class="pass-arrow">✈</i>
-            <div><b>${route.to.iata}</b><span>${route.to.city}</span></div>
+            <div><b>${flight.to.iata}</b><span>${flight.to.city}</span></div>
           </div>
           <div class="pass-grid">
             <div><span class="tag">gate</span><b>${pass.gate}</b></div>
-            <div><span class="tag">seat</span><b>${pass.seat}</b></div>
+            <div><span class="tag">seat</span><b id="passSeat">${seat}</b></div>
             <div><span class="tag">duration</span><b>${m}′</b></div>
           </div>
-          <p class="tag">purpose · ${pass.purpose}</p>
+          <p class="tag">${cabin.name} · ${cabin.work} · purpose · ${purpose || cabin.work}</p>
         </div>
         <div class="pass-tear"></div>
         <div class="pass-stub">
@@ -236,17 +356,20 @@ export function focusBoardView(root: HTMLElement): () => void {
           <p class="tag">tear to board</p>
         </div>
       </div>
-      <button class="big tap" id="board">TEAR THE STUB</button>`,
-    );
-    const tear = (): void => {
-      host.querySelector('#pass')!.classList.add('torn');
-      window.setTimeout(() => {
-        (host as HTMLElement & { close: () => void }).close();
-        location.hash = `#/focus/flight/${m}/${encodeURIComponent(purpose)}`;
-      }, 620);
+      <button class="big tap" id="board">TEAR THE STUB</button>`;
+      const tear = (): void => {
+        host.querySelector('#pass')!.classList.add('torn');
+        setNextFlight({ from: flight.from.iata, to: flight.to.iata, seat, cabin: cabin.name, minutes: m });
+        window.setTimeout(() => {
+          (host as HTMLElement & { close: () => void }).close();
+          location.hash = `#/focus/flight/${m}/${encodeURIComponent(purpose || cabin.work)}`;
+        }, 620);
+      };
+      body.querySelector('#board')!.addEventListener('click', tear);
+      body.querySelector('.pass-stub')!.addEventListener('click', tear);
     };
-    host.querySelector('#board')!.addEventListener('click', tear);
-    host.querySelector('.pass-stub')!.addEventListener('click', tear);
+
+    gateStep();
   });
 
   root.querySelector<HTMLElement>('.hist')!.addEventListener('click', (ev) => {

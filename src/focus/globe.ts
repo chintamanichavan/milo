@@ -7,8 +7,8 @@ import { createTileLayer, TILE_INTERVAL, type TileLayer } from './tiles';
 import { buildAircraft, type Plane3D } from './aircraft3d';
 import type { Airport } from './airports';
 
-export type CameraMode = 'chase' | 'wing' | 'orbit' | 'overhead';
-export const CAMERA_MODES: CameraMode[] = ['chase', 'wing', 'orbit', 'overhead'];
+export type CameraMode = 'chase' | 'wing' | 'cabin' | 'orbit' | 'overhead';
+export const CAMERA_MODES: CameraMode[] = ['chase', 'wing', 'cabin', 'orbit', 'overhead'];
 
 export interface GlobeRoute {
   from: Airport;
@@ -389,6 +389,8 @@ export async function createGlobe(
     }),
   );
   scene.add(atmosphere);
+  /** the tests can switch the air off; the cabin view hides it for itself */
+  let atmosphereOn = true;
 
   // stars: many, faint, gently twinkling
   const STAR_COUNT = limits.stars;
@@ -403,18 +405,17 @@ export async function createGlobe(
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   starGeo.setAttribute('seed', new THREE.BufferAttribute(seeds, 1));
   const starTime = { value: 0 };
-  scene.add(
-    new THREE.Points(
-      starGeo,
-      new THREE.ShaderMaterial({
-        uniforms: { time: starTime },
-        vertexShader: STAR_VERT,
-        fragmentShader: STAR_FRAG,
-        transparent: true,
-        depthWrite: false,
-      }),
-    ),
+  const stars = new THREE.Points(
+    starGeo,
+    new THREE.ShaderMaterial({
+      uniforms: { time: starTime },
+      vertexShader: STAR_VERT,
+      fragmentShader: STAR_FRAG,
+      transparent: true,
+      depthWrite: false,
+    }),
   );
+  scene.add(stars);
 
   /* ---------- the route ---------- */
 
@@ -706,6 +707,16 @@ export async function createGlobe(
       desiredTarget.copy(centre);
       return;
     }
+    if (showPlane && cameraMode === 'cabin') {
+      // a window seat: out to the side and a little down, the horizon just above the middle
+      desired.copy(at);
+      desiredTarget
+        .copy(at)
+        .add(side.clone().multiplyScalar(-1))
+        .add(tangent.clone().multiplyScalar(0.28))
+        .add(here.clone().multiplyScalar(-0.27));
+      return;
+    }
     if (showPlane && cameraMode === 'overhead') {
       const { centre, back } = fitRoute();
       desired.copy(centre.clone().normalize().multiplyScalar(centre.length() + back));
@@ -783,7 +794,7 @@ export async function createGlobe(
     // the shadow follows the aircraft at any height, thrown a little away from
     // the sun, which is what tells you how high the thing is flying
     const low = phaseName === 'taxi' || phaseName === 'takeoff' || phaseName === 'landing';
-    blob.visible = showPlane;
+    blob.visible = showPlane && cameraMode !== 'cabin';
     if (blob.visible) {
       const up = here.clone().normalize();
       const sun = sunDir.value.clone().normalize();
@@ -880,7 +891,13 @@ export async function createGlobe(
       tileLayer.fade(Math.min(0.05, (now - lastSpring) / 1000));
       if (now - lastTiles > TILE_INTERVAL) {
         lastTiles = now;
-        const at = desiredTarget.lengthSq() > 0.01 ? desiredTarget : plane.position;
+        // from the window seat, the ground that matters is out beside the aircraft
+        const at =
+          showPlane && cameraMode === 'cabin'
+            ? camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(0.09)).normalize()
+            : desiredTarget.lengthSq() > 0.01
+              ? desiredTarget
+              : plane.position;
         // and where the aircraft will be in a couple of minutes
         const ahead = showPlane && points.length ? points[Math.min(points.length - 1, Math.round(progress * points.length) + 12)] : undefined;
         tileLayer.update(at, camera.position.length(), groundSpan(at), ahead);
@@ -908,6 +925,31 @@ export async function createGlobe(
       spring((now - lastSpring) / 1000);
       camera.lookAt(desiredTarget);
     }
+    const cabin = showPlane && cameraMode === 'cabin';
+    if (cabin) {
+      camera.up.copy(plane.position).normalize();
+      camera.position.copy(desired);
+      camera.lookAt(desiredTarget);
+      if (camera.near !== 0.0004) {
+        camera.near = 0.0004;
+        camera.far = 60;
+        camera.updateProjectionMatrix();
+      }
+      // inside the air there is sky, not a glowing shell: the page paints it behind the canvas
+      const lit = plane.position.clone().normalize().dot(sunDir.value.clone().normalize());
+      const sky = lit > 0.12 ? 'day' : lit > -0.12 ? 'dusk' : 'night';
+      if (renderer.domElement.dataset.sky !== sky) renderer.domElement.dataset.sky = sky;
+    } else if (camera.near !== 0.05) {
+      camera.up.set(0, 1, 0);
+      camera.near = 0.05;
+      camera.far = 200;
+      camera.updateProjectionMatrix();
+      delete renderer.domElement.dataset.sky;
+    }
+    // from the seat you see the wing through the window frame, not the aircraft from outside
+    plane.visible = showPlane && !cabin;
+    atmosphere.visible = !cabin && atmosphereOn;
+    stars.visible = !cabin || renderer.domElement.dataset.sky === 'night';
     lastSpring = now;
     // labels fade on the far side and hold a steady size, however close the camera gets
     for (const [sprite, pin, width] of [
@@ -1078,6 +1120,7 @@ export async function createGlobe(
         uniforms.cloudVisible.value = withCloudLayer ? 1 : 0;
         uniforms.specAmount.value = withSpecular ? 1 : 0;
         uniforms.normalAmount.value = withNormals && limits.normals ? 1 : 0;
+        atmosphereOn = withAtmosphere;
         atmosphere.visible = withAtmosphere;
         render();
       },

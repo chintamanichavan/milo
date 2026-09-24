@@ -17,13 +17,22 @@ export interface Flight {
     seat: string;
     departs: string;
     stripe: string;
+    /** the cabin you sat in, which names the kind of work */
+    cabin?: string;
   };
 }
 
 export type SkyMode = 'globe' | 'satellite' | 'flat';
 
 export interface Ambient {
-  sound: 'off' | 'cabin' | 'rain' | 'cafe';
+  sound: 'off' | 'cabin' | 'rain' | 'cafe' | 'ocean' | 'forest';
+  volume: number;
+}
+
+export type MusicTrack = 'off' | 'lofi' | 'piano' | 'brown' | 'binaural';
+
+export interface Music {
+  track: MusicTrack;
   volume: number;
 }
 
@@ -42,6 +51,7 @@ export interface FocusSettings {
   weeklyGoalH: number;
   sky: SkyMode;
   ambient: Ambient;
+  music?: Music;
   aircraft: string;
   motion?: boolean;
   hintSeen?: boolean;
@@ -222,3 +232,30 @@ export const lastAirport = (state: FocusState): string => {
 
 export const hh = (hours: number): string => `${hours.toFixed(1)} h`;
 export const mins = (sec: number): string => `${Math.round(sec / 60)}′`;
+
+/* ---------- the next flight, chosen at check-in ---------- */
+
+export interface NextFlight {
+  from: string;
+  to: string;
+  seat: string;
+  cabin: string;
+  minutes: number;
+}
+
+const NEXT_KEY = 'c25k.focus.next';
+
+/** the gate hands the chosen route and seat to the flight that follows */
+export function setNextFlight(next: NextFlight): void {
+  sessionStorage.setItem(NEXT_KEY, JSON.stringify(next));
+}
+
+export function takeNextFlight(from: string, minutes: number): NextFlight | null {
+  try {
+    const next = JSON.parse(sessionStorage.getItem(NEXT_KEY) ?? 'null') as NextFlight | null;
+    sessionStorage.removeItem(NEXT_KEY);
+    return next && next.from === from && next.minutes === minutes ? next : null;
+  } catch {
+    return null;
+  }
+}

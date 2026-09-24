@@ -6,9 +6,9 @@ export type SkyMode = 'globe' | 'satellite' | 'flat';
 export interface Sky {
   mode: SkyMode;
   setProgress(t: number): void;
-  setCamera?(mode: 'chase' | 'wing' | 'orbit' | 'overhead', manual?: boolean): void;
+  setCamera?(mode: 'chase' | 'wing' | 'cabin' | 'orbit' | 'overhead', manual?: boolean): void;
   setPhase?(phase: string): void;
-  cameraMode?(): 'chase' | 'wing' | 'orbit' | 'overhead';
+  cameraMode?(): 'chase' | 'wing' | 'cabin' | 'orbit' | 'overhead';
   tiles?(): number;
   shake?(strength?: number): void;
   pause(): void;

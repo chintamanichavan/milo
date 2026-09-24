@@ -3969,3 +3969,162 @@ select.wl-size {
   color: var(--text);
   text-decoration: none;
 }
+
+/* ---------- focus: the cabin window, check-in, seats ---------- */
+
+.cabin-frame {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cabin-frame[hidden] {
+  display: none;
+}
+
+.cabin-rim {
+  fill: none;
+  stroke: #8f8c85;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.cabin-shade {
+  fill: #cfccc4;
+  opacity: 0.85;
+}
+
+.gate-grid {
+  display: grid;
+  gap: calc(var(--u) * 1.5);
+  grid-template-columns: repeat(3, 1fr);
+  margin: calc(var(--u) * 2) 0;
+}
+
+.gate-grid b {
+  display: block;
+  font: 500 var(--t17) / 1.2 var(--mono);
+}
+
+.gate-now {
+  color: var(--run);
+}
+
+.seatmap {
+  display: grid;
+  max-height: 46dvh;
+  padding-right: 4px;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.seat-cabin {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--u);
+}
+
+.seat-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+
+.seat-row > i {
+  width: 22px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  text-align: right;
+}
+
+.seat-aisle {
+  width: 18px;
+}
+
+.seat {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px 8px 4px 4px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 500 11px / 1 var(--mono);
+  cursor: pointer;
+}
+
+.seat-row.first .seat,
+.seat-row.business .seat {
+  width: 44px;
+  height: 42px;
+}
+
+.seat:disabled {
+  border-style: dashed;
+  background: none;
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.seat.on {
+  border-color: var(--run);
+  background: var(--run);
+  color: var(--ink);
+}
+
+.seat-pick {
+  margin: calc(var(--u) * 2) 0;
+  font-size: var(--t14);
+}
+
+.route-row {
+  display: flex;
+  gap: var(--u);
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.route-row .link {
+  flex: 0 0 auto;
+  min-height: 32px;
+  font-size: var(--t12);
+}
+
+.cabin-wing {
+  fill: #a7afb9;
+}
+
+.cabin-edge {
+  fill: none;
+  stroke: #6f7782;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.cabin-nav {
+  fill: #ff4d4d;
+  animation: cabin-blink 1.2s steps(1) infinite;
+}
+
+@keyframes cabin-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* seen from the seat, the sky is behind the globe canvas, painted by the page */
+canvas[data-sky='day'] {
+  background: linear-gradient(#3f7cc9, #8fb8e8 55%, #dce8f4);
+}
+
+canvas[data-sky='dusk'] {
+  background: linear-gradient(#27315c, #b26a6a 60%, #f0b27a);
+}
+
+canvas[data-sky='night'] {
+  background: linear-gradient(#02040a, #0b1330);
+}

@@ -115,6 +115,26 @@ export interface Route {
   band: string;
 }
 
+/** a flight to a particular airport, for the surprises and the chosen seats */
+export function routeTo(fromIata: string, toIata: string, minutes: number): Route {
+  const from = airport(fromIata);
+  const to = airport(toIata);
+  return { from, to, km: distanceKm(from, to), band: BANDS[bandFor(minutes)].name };
+}
+
+/** Surprise me: any airport in the world that fits the time, picked at random. */
+export function surpriseRoute(fromIata: string, minutes: number, avoid = ''): Route {
+  const from = airport(fromIata);
+  const { min, max } = BANDS[bandFor(minutes)];
+  let pool = AIRPORTS.filter((a) => {
+    if (a.iata === from.iata || a.iata === avoid) return false;
+    const km = distanceKm(from, a);
+    return km >= min && km < max;
+  });
+  if (pool.length === 0) pool = AIRPORTS.filter((a) => a.iata !== from.iata && a.iata !== avoid);
+  return routeTo(from.iata, pool[Math.floor(Math.random() * pool.length)].iata, minutes);
+}
+
 /** Same inputs, same route — the board and the flight always agree. */
 export function planRoute(fromIata: string, minutes: number, seed: string): Route {
   const from = airport(fromIata);

@@ -5,7 +5,7 @@ import { now, whenAdvanced } from '../../clock';
 import { sheet } from '../../ui/sheet';
 import { clock } from '../../ui/time';
 import { planeSilhouette } from '../aircraft3d';
-import { KM_TO_MI, localTime, planRoute } from '../airports';
+import { KM_TO_MI, localTime, planRoute, routeTo } from '../airports';
 import {
   announcement,
   boardingPass,
@@ -28,7 +28,10 @@ import {
   setFocusSettings,
   type Outcome,
   type SkyMode,
+  takeNextFlight,
+  type MusicTrack,
 } from '../store';
+import { setMusicVolume, startMusic, stopMusic } from '../music';
 import { createSky, type Sky } from '../sky';
 import type { CameraMode } from '../globe';
 import { setLanding } from './landed';
@@ -49,8 +52,12 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   const settings = state.settings;
   const showHint = !settings.hintSeen;
   if (showHint) setFocusSettings({ hintSeen: true });
-  const route = planRoute(lastAirport(state), minutes, String(state.flights.length));
-  const pass = boardingPass(route.from, route.to, minutes, label);
+  // the gate may already have chosen the route and the seat
+  const next = takeNextFlight(lastAirport(state), minutes);
+  const route = next
+    ? routeTo(next.from, next.to, minutes)
+    : planRoute(lastAirport(state), minutes, String(state.flights.length));
+  const pass = { ...boardingPass(route.from, route.to, minutes, label), ...(next ? { seat: next.seat } : {}) };
   const grace = settings.strict ? 0 : GRACE_MS;
 
   const startedAt = now();
@@ -61,6 +68,26 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       aria-label="Hold anywhere to divert">
       <div class="sky-stage">
         <div class="sky-host stage" id="sky"></div>
+        <svg class="cabin-frame" id="cabinFrame" hidden viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <mask id="porthole">
+              <rect width="100" height="100" fill="#fff"/>
+              <rect x="19" y="12" width="62" height="76" rx="26" ry="22" fill="#000"/>
+            </mask>
+            <linearGradient id="wall" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#b9b6ae"/><stop offset=".5" stop-color="#e2dfd8"/><stop offset="1" stop-color="#aeaba3"/>
+            </linearGradient>
+          </defs>
+          <clipPath id="glass"><rect x="19" y="12" width="62" height="76" rx="26" ry="22"/></clipPath>
+          <g clip-path="url(#glass)">
+            <path class="cabin-wing" d="M-4 100 L-4 83 L78 68 L86 69.5 L40 100 Z"/>
+            <path class="cabin-edge" d="M-4 83 L78 68"/>
+            <circle class="cabin-nav" cx="80.5" cy="68.6" r="1.1"/>
+          </g>
+          <rect width="100" height="100" fill="url(#wall)" mask="url(#porthole)"/>
+          <rect class="cabin-rim" x="18" y="11" width="64" height="78" rx="27" ry="23"/>
+          <rect class="cabin-shade" x="21" y="12" width="58" height="9" rx="4"/>
+        </svg>
         <div class="pip" id="pip" hidden>
           <svg viewBox="0 0 120 70" width="110" height="64" aria-label="route tracker">
             <path id="pipArc" d="M12 54 Q60 12 108 54" fill="none" stroke="currentColor"
@@ -132,6 +159,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   const liveEl = root.querySelector<HTMLElement>('#live')!;
   const skyBtn = root.querySelector<HTMLElement>('#skyBtn')!;
   const pip = root.querySelector<HTMLElement>('#pip')!;
+  const cabinFrame = root.querySelector<SVGSVGElement>('#cabinFrame')!;
   const pipFlown = root.querySelector<SVGPathElement>('#pipFlown')!;
   const pipPlane = root.querySelector<SVGCircleElement>('#pipPlane')!;
   const pipArc = root.querySelector<SVGPathElement>('#pipArc')!;
@@ -166,7 +194,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     sky.setProgress(Math.min(1, elapsed() / plannedSec));
   }
 
-  const CAMERAS: CameraMode[] = ['chase', 'wing', 'orbit', 'overhead'];
+  const CAMERAS: CameraMode[] = ['chase', 'wing', 'cabin', 'orbit', 'overhead'];
   let camIndex = 0;
   let done = false;
   let halfway = false;
@@ -201,6 +229,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
         seat: pass.seat,
         departs: pass.departs,
         stripe: pass.stripe,
+        ...(next ? { cabin: next.cabin } : {}),
       },
     };
     addFlight(flight);
@@ -239,7 +268,9 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     const live = sky?.cameraMode?.() ?? CAMERAS[camIndex];
     const streaming = (sky?.tiles?.() ?? 0) > 0;
     if (attribution.hidden === streaming) attribution.hidden = !streaming;
-    pip.hidden = !['chase', 'wing'].includes(live);
+    pip.hidden = !['chase', 'wing', 'cabin'].includes(live);
+    const inCabin = live === 'cabin';
+    if (cabinFrame.hasAttribute('hidden') === inCabin) cabinFrame.toggleAttribute('hidden', !inCabin);
 
     const nextPhase = phaseAt(t);
     if (nextPhase !== phase) {
@@ -320,10 +351,12 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
 
   root.querySelector<HTMLElement>('#soundBtn')!.addEventListener('click', () => {
     const { ambient } = loadFocus().settings;
+    const music = loadFocus().settings.music ?? { track: 'off', volume: 0.35 };
     const host = sheet(
-      'Cabin sound',
-      `<div class="chips" id="sounds">
-         ${(['off', 'cabin', 'rain', 'cafe'] as const)
+      'Sound',
+      `<p class="tag">Around you</p>
+       <div class="chips" id="sounds">
+         ${(['off', 'cabin', 'rain', 'cafe', 'ocean', 'forest'] as const)
            .map(
              (s) =>
                `<button class="chip tap${s === ambient.sound ? ' on' : ''}" data-sound="${s}">${s}</button>`,
@@ -331,7 +364,27 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
            .join('')}
        </div>
        <label class="field"><span class="tag">Volume</span>
-         <input type="range" id="vol" min="0" max="1" step="0.05" value="${ambient.volume}"></label>`,
+         <input type="range" class="slider" id="vol" min="0" max="1" step="0.05" value="${ambient.volume}"></label>
+       <p class="tag">Focus music</p>
+       <div class="chips" id="tracks">
+         ${(
+           [
+             ['off', 'off'],
+             ['lofi', 'lo-fi pad'],
+             ['piano', 'piano'],
+             ['brown', 'brown noise'],
+             ['binaural', 'binaural'],
+           ] as const
+         )
+           .map(
+             ([id, name]) =>
+               `<button class="chip tap${id === music.track ? ' on' : ''}" data-track="${id}">${name}</button>`,
+           )
+           .join('')}
+       </div>
+       <label class="field"><span class="tag">Music volume</span>
+         <input type="range" class="slider" id="musicVol" min="0" max="1" step="0.05" value="${music.volume}"></label>
+       <p class="line sub">All of it is made on the phone as it plays. The binaural beat wants headphones.</p>`,
     );
     host.querySelector('#sounds')!.addEventListener('click', (ev) => {
       const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-sound]');
@@ -347,6 +400,20 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
       const volume = Number((ev.target as HTMLInputElement).value);
       setFocusSettings({ ambient: { ...loadFocus().settings.ambient, volume } });
       setAmbientVolume(volume);
+    });
+    host.querySelector('#tracks')!.addEventListener('click', (ev) => {
+      const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-track]');
+      if (!chip) return;
+      for (const el of host.querySelectorAll('[data-track]')) el.classList.remove('on');
+      chip.classList.add('on');
+      const next = { ...(loadFocus().settings.music ?? { track: 'off', volume: 0.35 }), track: chip.dataset.track as MusicTrack };
+      setFocusSettings({ music: next });
+      startMusic(next.track, next.volume);
+    });
+    host.querySelector('#musicVol')!.addEventListener('input', (ev) => {
+      const volume = Number((ev.target as HTMLInputElement).value);
+      setFocusSettings({ music: { ...(loadFocus().settings.music ?? { track: 'off', volume }), volume } });
+      setMusicVolume(volume);
     });
   });
 
@@ -407,6 +474,8 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
   void takeLock();
   void mountSky(mode);
   startAmbientFromSettings();
+  const music = settings.music;
+  if (music && music.track !== 'off') startMusic(music.track, music.volume);
   beep('takeoff');
   paint();
 
@@ -422,6 +491,7 @@ export function flightView(root: HTMLElement, minutes: number, label: string): (
     void lock?.release();
     stopSpeech();
     stopAmbient();
+    stopMusic();
     sky?.dispose();
     if (!done && elapsed() > 10) record('aborted', elapsed(), false);
   };
