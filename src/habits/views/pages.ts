@@ -13,8 +13,12 @@ import {
   type Mark,
   type TimeOfDay,
 } from '../model';
+import { atomSvg } from '../atom';
 import {
+  awaitFocus,
   bestStreak,
+  bump,
+  coachTips,
   cleanDays,
   consistency,
   deleteHabit,
@@ -30,6 +34,7 @@ import {
   saveHabit,
   saveReflection,
   streak,
+  targetOf,
   todaysHabits,
   unmark,
   votes,
@@ -55,6 +60,17 @@ const shell = (active: string, body: string): string => `
     ${body}
   </section>`;
 
+/** the count ring on a numeric habit */
+function countRing(count: number, target: number): string {
+  const c = 2 * Math.PI * 22;
+  const t = Math.min(1, count / target);
+  return `<svg viewBox="0 0 52 52" width="52" height="52" aria-hidden="true">
+    <circle class="goal-bg" cx="26" cy="26" r="22" fill="none" stroke-width="4"/>
+    <circle class="goal-fg" cx="26" cy="26" r="22" fill="none" stroke-width="4" stroke-linecap="round"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - t)).toFixed(1)}"/>
+  </svg>`;
+}
+
 const intention = (h: Habit): string =>
   h.anchor
     ? `After I ${h.anchor}, I will ${h.behaviour}.`
@@ -71,15 +87,25 @@ export function habitsTodayView(root: HTMLElement): () => void {
   const row = (h: Habit): string => {
     const entry = entryFor(state, h.id);
     const missed = missState(state, h);
-    return `<div class="habit-row${entry ? ` marked ${entry.mark}` : ''}" data-habit="${h.id}">
+    const target = targetOf(h);
+    const count = entry?.count ?? (entry?.mark === 'done' ? target : 0);
+    const marked = entry && entry.mark !== 'partial';
+    return `<div class="habit-row${marked ? ` marked ${entry.mark}` : entry ? ' partial' : ''}" data-habit="${h.id}">
       <button class="habit-main tap" data-do="${h.id}">
         <b>${h.avoid ? `Not ${h.behaviour}` : h.behaviour}</b>
         <span class="tag">${h.avoid ? `${cleanDays(state, h)} clean days` : `a vote for ${h.identity}`}${
           streak(state, h) ? ` · ${streak(state, h)}-day streak` : ''
         }</span>
-        ${entry ? `<span class="tag done-tag">${entry.mark === 'tiny' ? 'tiny version' : entry.mark}</span>` : ''}
+        ${entry && entry.mark !== 'partial' ? `<span class="tag done-tag">${entry.mark === 'tiny' ? 'tiny version' : entry.mark}</span>` : ''}
       </button>
       <div class="habit-side">
+        ${
+          target > 1 && !h.avoid
+            ? `<button class="habit-count tap" data-bump="${h.id}" aria-label="${count} of ${target} ${h.unit ?? ''}, add one">${countRing(count, target)}<b>${count}/${target}</b></button>
+               <button class="link tap" data-less="${h.id}" aria-label="one fewer"${count ? '' : ' disabled'}>−</button>`
+            : ''
+        }
+        ${h.focusMin && !h.avoid ? `<button class="link tap" data-focus="${h.id}">focus ${h.focusMin}′</button>` : ''}
         ${
           h.avoid
             ? `<button class="link tap" data-slip="${h.id}">slipped</button>`
@@ -106,11 +132,15 @@ export function habitsTodayView(root: HTMLElement): () => void {
       }</span></h1>
       ${
         identities(state).length
-          ? `<div class="votes">${identities(state)
-              .map(
-                (id) =>
-                  `<span class="vote-chip">${votesForIdentity(state, id)} votes for <b>${id}</b></span>`,
-              )
+          ? `<div class="atoms">${identities(state)
+              .map((id) => {
+                const mine = state.habits.filter((h) => h.identity === id && !h.archived);
+                const steady = mine.length
+                  ? mine.reduce((sum, h) => sum + consistency(state, h, 30), 0) / mine.length
+                  : 0;
+                const n = votesForIdentity(state, id, 3650);
+                return `<div class="atom-id">${atomSvg(n, steady, 72, `${id}: ${n} votes`)}<b>${n} votes</b><span>${id}</span></div>`;
+              })
               .join('')}</div>`
           : '<p class="line">A habit is a vote for the person you want to be. Add one and start voting.</p>'
       }
@@ -122,6 +152,14 @@ export function habitsTodayView(root: HTMLElement): () => void {
         ? `<div class="panel"><p class="tag">${slot}</p>${rows.map(row).join('')}</div>`
         : '';
     }).join('')}
+    ${(() => {
+      const tips = coachTips(state, 2);
+      return tips.length
+        ? `<div class="panel coach"><p class="tag">Coach<span>from the last two weeks</span></p>${tips
+            .map((t) => `<a class="coach-tip tap" href="#/habits/habit/${t.habitId}"><b>${t.title}</b><span class="line sub">${t.why}</span></a>`)
+            .join('')}</div>`
+        : '';
+    })()}
     <a class="panel lesson tap" href="#/habits/lessons">
       <p class="tag">Today's lesson${state.readLessons.includes(lesson.id) ? ' · read' : ''}</p>
       <b>${lesson.title}</b>
@@ -142,9 +180,31 @@ export function habitsTodayView(root: HTMLElement): () => void {
     const pick = (key: string): string | null =>
       el.closest<HTMLElement>(`[data-${key}]`)?.dataset[key] ?? null;
     const done = pick('do');
+    const more = pick('bump');
+    const less = pick('less');
+    const focus = pick('focus');
     const tiny = pick('tiny');
     const skip = pick('skip');
     const slip = pick('slip');
+    const numeric = done && targetOf(state.habits.find((h) => h.id === done)!) > 1 ? done : null;
+    if (more || numeric) {
+      const id = (more ?? numeric)!;
+      const habit = state.habits.find((h) => h.id === id)!;
+      const { count, target } = bump(id);
+      if (count === target) toast(`A vote for ${habit.identity}`, true);
+      else toast(`${count} of ${target}${habit.unit ? ` ${habit.unit}` : ''}`);
+      return habitsTodayView(root);
+    }
+    if (less) {
+      bump(less, -1);
+      return habitsTodayView(root);
+    }
+    if (focus) {
+      const habit = state.habits.find((h) => h.id === focus)!;
+      awaitFocus(habit.id);
+      location.hash = `#/focus/flight/${habit.focusMin}/${encodeURIComponent(habit.behaviour)}`;
+      return;
+    }
     if (done) {
       const existing = entryFor(loadHabits(), done);
       if (existing) unmark(done);
@@ -260,6 +320,9 @@ export function habitNewView(root: HTMLElement, editId?: string): () => void {
                   <input class="num" id="perWeek" value="${(draft.schedule as { perWeek: number }).perWeek ?? 3}"></label>`
               : ''
           }
+          <label class="field row"><span>Times a day</span>
+            <input class="num" id="target" inputmode="numeric" value="${draft.target ?? 1}"></label>
+          <input class="dest" id="unit" value="${draft.unit ?? ''}" placeholder="what you count — glasses, pages, sets (optional)">
           <div class="chips" id="tod">
             ${TIMES.map(
               (t) => `<button class="chip tap${draft.timeOfDay === t ? ' on' : ''}" data-tod="${t}">${t}</button>`,
@@ -287,6 +350,9 @@ export function habitNewView(root: HTMLElement, editId?: string): () => void {
                   ).join('')}</select></label>`
               : ''
           }
+          <label class="field row"><span>Focus timer (minutes)</span>
+            <input class="num" id="focusMin" inputmode="numeric" placeholder="none" value="${draft.focusMin ?? ''}"></label>
+          <p class="line sub">With a timer, “focus” on the day's list takes off a Focus flight, and landing it counts as doing the habit.</p>
           <label class="field"><span class="tag">Remind me at</span>
             <input class="num" id="reminder" type="time" value="${draft.reminder ?? draft.time}"></label>
           <button class="big tap" id="save">${existing ? 'SAVE' : 'START VOTING'}</button>`,
@@ -335,8 +401,15 @@ export function habitNewView(root: HTMLElement, editId?: string): () => void {
     if (step === 4) draft.tiny = value('#tiny').trim();
     if (step === 5 && draft.schedule.kind === 'times')
       draft.schedule = { kind: 'times', perWeek: Number(value('#perWeek')) || 3 };
+    if (step === 5) {
+      const target = Math.round(Number(value('#target')) || 1);
+      draft.target = target > 1 ? Math.min(99, target) : undefined;
+      draft.unit = value('#unit').trim() || undefined;
+    }
     if (step === 6) {
       draft.reminder = value('#reminder') || undefined;
+      const focusMin = Math.round(Number(value('#focusMin')) || 0);
+      draft.focusMin = focusMin >= 5 ? Math.min(180, focusMin) : undefined;
       draft.laws = Object.fromEntries(
         [...root.querySelectorAll<HTMLInputElement>('[data-law]')].map((el) => [el.dataset.law, el.value.trim()]),
       );
@@ -487,8 +560,10 @@ export function habitDetailView(root: HTMLElement, id: string): () => void {
     '',
     `<div class="hero">
       <p class="tag section"><a class="tap" href="#/habits">← Habits</a></p>
+      <div class="atom-detail">${atomSvg(votes(state, habit.id), consistency(state, habit, 30), 132)}</div>
       <h1>${habit.behaviour}</h1>
       <p class="line">I am becoming ${habit.identity}.</p>
+      ${habit.target && habit.target > 1 ? `<p class="line sub">${habit.target} ${habit.unit ?? 'times'} a day.</p>` : ''}
       <p class="line sub">${intention(habit)}</p>
       <div class="records">
         <div><b>${votes(state, habit.id)}</b><span>votes</span></div>

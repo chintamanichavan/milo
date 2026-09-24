@@ -65,6 +65,45 @@ export function unmark(habitId: string, date = dayKey()): void {
   saveHabits(state);
 }
 
+export const targetOf = (habit: Habit): number => Math.max(1, Math.round(habit.target ?? 1));
+
+/** one more (or one fewer) towards a numeric goal; done once it is reached */
+export function bump(habitId: string, by = 1, date = dayKey()): { count: number; target: number } {
+  const state = loadHabits();
+  const habit = state.habits.find((h) => h.id === habitId);
+  if (!habit) return { count: 0, target: 1 };
+  const target = targetOf(habit);
+  const entry = entryFor(state, habitId, date);
+  const had = entry?.count ?? (entry?.mark === 'done' ? target : 0);
+  const count = Math.max(0, had + by);
+  state.entries = state.entries.filter((e) => !(e.habitId === habitId && e.date === date));
+  if (count > 0) state.entries.push({ habitId, date, mark: count >= target ? 'done' : 'partial', count });
+  saveHabits(state);
+  return { count, target };
+}
+
+const PENDING_KEY = 'c25k.habits.pending';
+
+/** a habit waiting on a Focus flight to land */
+export function awaitFocus(habitId: string): void {
+  localStorage.setItem(PENDING_KEY, JSON.stringify({ habitId, at: Date.now() }));
+}
+
+/** called when a flight lands: the habit it was for is done */
+export function claimFocus(): Habit | null {
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as { habitId: string; at: number } | null;
+    localStorage.removeItem(PENDING_KEY);
+    if (!pending || Date.now() - pending.at > 8 * 3600_000) return null;
+    const habit = loadHabits().habits.find((h) => h.id === pending.habitId);
+    if (!habit) return null;
+    bump(habit.id, targetOf(habit));
+    return habit;
+  } catch {
+    return null;
+  }
+}
+
 export const entryFor = (state: HabitState, habitId: string, date = dayKey()): Entry | undefined =>
   state.entries.find((e) => e.habitId === habitId && e.date === date);
 
@@ -226,4 +265,64 @@ export function monthSummary(state: HabitState): string {
   return `${kept} kept days in the last month${
     best ? `, most of them votes for ${best.id}` : ''
   }.`;
+}
+
+/* ---------- the coach ---------- */
+
+export interface Tip {
+  habitId: string;
+  title: string;
+  why: string;
+}
+
+const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+
+/**
+ * Suggestions from the last two weeks, in plain words: what the misses, the
+ * skips and the tiny versions say about how a habit is set up.
+ */
+export function coachTips(state: HabitState, max = 3): Tip[] {
+  const tips: (Tip & { weight: number })[] = [];
+  const live = state.habits.filter((h) => !h.archived && !h.avoid);
+  const steadiest = [...live].sort((a, b) => consistency(state, b, 14) - consistency(state, a, 14))[0];
+  for (const h of live) {
+    const born = bornOn(h);
+    let due = 0;
+    let missed = 0;
+    let tiny = 0;
+    let done = 0;
+    const missDays = [0, 0, 0, 0, 0, 0, 0];
+    const reasons: Record<string, number> = {};
+    for (let i = 1; i <= 14; i++) {
+      const date = shift(-i);
+      if (date.getTime() < born || !dueOn(h, date)) continue;
+      due++;
+      const entry = entryFor(state, h.id, dayKey(date));
+      if (entry?.mark === 'done') done++;
+      else if (entry?.mark === 'tiny') tiny++;
+      else if (entry?.mark === 'skip') reasons[entry.reason ?? 'other'] = (reasons[entry.reason ?? 'other'] ?? 0) + 1;
+      else {
+        missed++;
+        missDays[date.getDay()]++;
+      }
+    }
+    if (due < 3) continue;
+    const name = h.behaviour;
+    const worst = missDays.indexOf(Math.max(...missDays));
+    if (missed >= 3 && missDays[worst] >= 2)
+      tips.push({ habitId: h.id, weight: 5, title: `Plan around ${WEEKDAYS[worst]}`, why: `“${name}” slips most on ${WEEKDAYS[worst]}. Move it to a different time that day, or give it a tiny version just for then.` });
+    else if (missed >= 4)
+      tips.push({ habitId: h.id, weight: 4, title: `Shrink “${name}”`, why: `${missed} misses in two weeks. For the next seven days, the whole habit is “${h.tiny}” — nothing more.` });
+    if (missed >= 3 && h.timeOfDay === 'evening')
+      tips.push({ habitId: h.id, weight: 3, title: 'Move it earlier', why: `Evenings are when willpower runs out. Try “${name}” in the morning or at lunch.` });
+    if (missed >= 3 && h.anchor && steadiest && steadiest.id !== h.id)
+      tips.push({ habitId: h.id, weight: 3, title: 'Re-stack it', why: `“After I ${h.anchor}” is not holding. Stack it after “${steadiest.behaviour}” instead — that one you keep.` });
+    if ((reasons.travelling ?? 0) >= 2)
+      tips.push({ habitId: h.id, weight: 2, title: 'Give it a travel version', why: `You skipped “${name}” for travel twice. Decide now what the hotel-room version is.` });
+    if (tiny > done && tiny >= 3)
+      tips.push({ habitId: h.id, weight: 2, title: 'The tiny version is the habit', why: `You mostly do “${h.tiny}”. That is fine — keep showing up, and grow it once it feels automatic.` });
+    if (missed === 0 && done >= 10)
+      tips.push({ habitId: h.id, weight: 1, title: `Ready to grow “${name}”`, why: 'Two weeks without a miss. Add a minute, or a page — about one percent more.' });
+  }
+  return tips.sort((a, b) => b.weight - a.weight).slice(0, max);
 }

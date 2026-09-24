@@ -3,6 +3,7 @@ import { now, whenAdvanced } from '../../clock';
 import { toast } from '../../ui/toast';
 import { setText } from '../../ui/dom';
 import { clock } from '../../ui/time';
+import { claimFocus } from '../../habits/store';
 import { checkBadges } from '../achievements';
 import { airport, KM_TO_MI } from '../airports';
 import { arrivalFor, rankFor, wings, weatherAt } from '../flightkit';
@@ -33,6 +34,8 @@ export function landedView(root: HTMLElement): () => void {
   }
   landing = null;
   const fresh = checkBadges();
+  // a flight taken for a habit counts as doing it
+  const habit = claimFocus();
   const { dailyGoalH, weeklyGoalH, breakMin, chain } = state.settings;
   const today = hoursOn(state, dayKey(flight.start));
   const thisWeek = weekHours(state);
@@ -79,8 +82,10 @@ export function landedView(root: HTMLElement): () => void {
         <div><b>${hh(thisWeek)}</b><span>week · ${weeklyGoalH} h goal</span></div>
       </div>
       ${
-        fresh.length
-          ? `<ul class="changes">${fresh.map((b) => `<li>${b.name} earned</li>`).join('')}</ul>`
+        fresh.length || habit
+          ? `<ul class="changes">${fresh.map((b) => `<li>${b.name} earned</li>`).join('')}${
+              habit ? `<li id="habitVote">Habit done: ${habit.behaviour} — a vote for ${habit.identity}</li>` : ''
+            }</ul>`
           : ''
       }
       <div class="rest" id="breakBar" hidden>
@@ -100,6 +105,7 @@ export function landedView(root: HTMLElement): () => void {
     });
   for (const badge of fresh) toast(`${badge.name} earned`, true);
   if (today >= dailyGoalH) toast('Daily goal met', true);
+  if (habit) toast(`A vote for ${habit.identity}`, true);
 
   const bar = root.querySelector<HTMLElement>('#breakBar')!;
   const clockEl = root.querySelector<HTMLElement>('#breakClock')!;

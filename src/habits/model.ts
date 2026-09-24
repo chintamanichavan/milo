@@ -25,9 +25,15 @@ export interface Habit {
   /** a habit you are quitting, counted in clean days */
   avoid?: boolean;
   inversion?: string;
+  /** a number to reach each day, like eight glasses; one if left out */
+  target?: number;
+  unit?: string;
+  /** minutes of focus that count as doing it, launched as a Focus flight */
+  focusMin?: number;
 }
 
-export type Mark = 'done' | 'tiny' | 'skip' | 'slip';
+/** partial: some of a numeric goal, not all of it yet */
+export type Mark = 'done' | 'tiny' | 'skip' | 'slip' | 'partial';
 
 export interface Entry {
   habitId: string;
@@ -35,6 +41,8 @@ export interface Entry {
   mark: Mark;
   reason?: string;
   note?: string;
+  /** how many, for a habit with a number to reach */
+  count?: number;
 }
 
 export interface Reflection {

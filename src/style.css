@@ -3837,3 +3837,135 @@ select.wl-size {
 .wl-fact .line {
   font-size: var(--t14);
 }
+
+/* ---------- habits: atoms, counts, the coach ---------- */
+
+.atom {
+  display: block;
+  overflow: visible;
+}
+
+.atom-halo {
+  fill: var(--run);
+}
+
+.atom-core {
+  fill: var(--run);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: atom-breathe 3.2s ease-in-out infinite;
+}
+
+.atom-shine {
+  fill: #fff;
+  opacity: 0.35;
+}
+
+.atom-orbit {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 0.8;
+  opacity: 0.55;
+}
+
+.atom-electron {
+  fill: var(--text);
+}
+
+/* each electron rides its orbit: the orbit is squashed, so the spin is too */
+.atom-spin {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  animation: atom-spin 6s linear infinite;
+}
+
+@keyframes atom-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes atom-breathe {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.atoms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2);
+  margin-bottom: calc(var(--u) * 2);
+}
+
+.atom-id {
+  display: grid;
+  width: 104px;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+}
+
+.atom-id span {
+  color: var(--muted);
+  font-size: var(--t12);
+  line-height: 1.3;
+}
+
+.atom-id b {
+  font: 500 var(--t12) / 1 var(--mono);
+}
+
+.habit-count {
+  position: relative;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.habit-count svg {
+  position: absolute;
+  inset: 0;
+}
+
+.habit-count b {
+  font: 500 var(--t12) / 1 var(--mono);
+}
+
+.coach-tip {
+  display: grid;
+  gap: 4px;
+  padding: var(--u) 0;
+  border-top: 1px solid var(--line);
+}
+
+.coach-tip:first-of-type {
+  border-top: 0;
+}
+
+.coach-tip b {
+  font: 500 var(--t14) / 1.3 var(--sans);
+}
+
+.dot-day.partial {
+  background: color-mix(in srgb, var(--run) 40%, transparent);
+}
+
+.atom-detail {
+  margin-bottom: var(--u);
+}
+
+.habit-row.partial .habit-main {
+  border-color: color-mix(in srgb, var(--run) 40%, transparent);
+}
+
+.coach-tip {
+  color: var(--text);
+  text-decoration: none;
+}
