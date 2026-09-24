@@ -163,9 +163,21 @@ if (new URLSearchParams(location.search).has('test'))
   };
 
 // a new version waits until you are on a board screen, never mid-flight
+let swReg: ServiceWorkerRegistration | undefined;
+let updateReady = false;
 const updateSW = registerSW({
-  immediate: false,
+  immediate: true,
+  onRegisteredSW(_url, reg) {
+    swReg = reg;
+    // a home-screen app resumes without reloading, so look for a new build
+    // every time it comes to the front and every 15 minutes while it is open
+    const look = (): void => { void reg?.update().catch(() => {}); };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); });
+    setInterval(look, 15 * 60 * 1000);
+  },
   onNeedRefresh() {
+    updateReady = true;
+    document.dispatchEvent(new CustomEvent('milo:update-ready'));
     const settle = (): void => {
       const view = document.body.dataset.view ?? '';
       const busy = view.startsWith('run-') || view.startsWith('focus-flight') || view.startsWith('lift-session');
@@ -177,3 +189,15 @@ const updateSW = registerSW({
     settle();
   },
 });
+
+
+(window as unknown as { __miloUpdate: unknown }).__miloUpdate = {
+  ready: () => updateReady,
+  check: async (): Promise<'ready' | 'current' | 'offline'> => {
+    if (!navigator.onLine) return 'offline';
+    try { await swReg?.update(); } catch { /* no network */ }
+    await new Promise((r) => setTimeout(r, 1500));
+    return updateReady ? 'ready' : 'current';
+  },
+  apply: () => { void updateSW(true); },
+};
