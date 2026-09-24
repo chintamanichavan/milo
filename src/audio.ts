@@ -29,10 +29,12 @@ const PATTERNS: Record<string, Note[]> = {
   chime: [[988, 0, 220, 0.16]],
   landing: [[784, 0, 150], [1047, 160, 150], [1319, 320, 460]],
   go: [[880, 0, 90], [1319, 100, 320]],
+  drop: [[1175, 0, 40, 0.1], [1568, 45, 70, 0.08]],
 };
 
-export function beep(pattern: keyof typeof PATTERNS): void {
-  if (!ctx || !load().settings.beep) return;
+/** @param always play even with the run's beeps turned off, for sounds with their own switch */
+export function beep(pattern: keyof typeof PATTERNS, always = false): void {
+  if (!ctx || (!always && !load().settings.beep)) return;
   const t0 = ctx.currentTime + 0.02;
   for (const [freq, startMs, lenMs, gainTo = 0.28] of PATTERNS[pattern]) {
     const osc = ctx.createOscillator();

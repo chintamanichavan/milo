@@ -6,7 +6,6 @@ import { toast } from '../../ui/toast';
 import { loadFoods, lookupBarcode, scanBarcode, searchFoods, type Food } from '../foods';
 import {
   addEntry,
-  addWater,
   addWeight,
   checkIn,
   copyDay,
@@ -32,6 +31,7 @@ import {
   type Meal,
 } from '../store';
 import { RDA, trend, PACE_LB_PER_WEEK, type Pace } from '../tdee';
+import { bindQuickCard, quickCardHtml } from '../../water/quick';
 
 const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -72,11 +72,11 @@ export function fuelTodayView(root: HTMLElement, date = dayKey()): () => void {
   const today = entriesOn(state, date);
   const totals = sumOf(today);
   const { kcal, macros } = targets(state);
-  const water = state.water[date] ?? 0;
 
   root.innerHTML = shell(
     '',
-    `<div class="hero">
+    `${date === dayKey() ? quickCardHtml() : ''}
+    <div class="hero">
       <p class="tag section">Fuel · ${loggedStreak(state)}-day logging streak</p>
       <h1>${Math.max(0, kcal - totals.kcal)}<span><i> · </i>kcal left</span></h1>
       <div class="goals">
@@ -90,13 +90,12 @@ export function fuelTodayView(root: HTMLElement, date = dayKey()): () => void {
         <button class="chip tap" id="scan">scan</button>
         <button class="chip tap" id="quick">quick add</button>
         <button class="chip tap" id="copy">copy yesterday</button>
-        <button class="chip tap" id="water">+250 ml water</button>
       </div>
-      <p class="line sub">Water ${water} of ${state.waterGoalMl} ml${
+      <p class="line sub">${
         state.fasting
-          ? ` · fasting ${longClock((Date.now() - state.fasting.startedAt) / 1000)} of ${state.fasting.goalHours}h`
+          ? `Fasting ${longClock((Date.now() - state.fasting.startedAt) / 1000)} of ${state.fasting.goalHours}h · `
           : ''
-      } · <button class="link tap" id="fast">${state.fasting ? 'end fast' : 'start a fast'}</button></p>
+      }<button class="link tap" id="fast">${state.fasting ? 'end fast' : 'start a fast'}</button></p>
     </div>
     ${MEALS.map((meal) => {
       const rows = today.filter((e) => e.meal === meal);
@@ -229,10 +228,7 @@ export function fuelTodayView(root: HTMLElement, date = dayKey()): () => void {
     fuelTodayView(root, date);
     toast(n ? `${n} items copied` : 'Nothing logged yesterday');
   });
-  root.querySelector('#water')!.addEventListener('click', () => {
-    addWater(250, date);
-    fuelTodayView(root, date);
-  });
+  bindQuickCard(root, () => fuelTodayView(root, date));
   root.querySelector('#fast')!.addEventListener('click', () => {
     if (loadFuel().fasting) stopFast();
     else startFast(16);

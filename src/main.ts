@@ -25,6 +25,7 @@ const chunks = {
   cook: () => import('./cook/views/pages'),
   fuel: () => import('./fuel/views/pages'),
   habits: () => import('./habits/views/pages'),
+  water: () => import('./water/views/pages'),
 };
 
 async function route(): Promise<void> {
@@ -33,7 +34,7 @@ async function route(): Promise<void> {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
   document.body.dataset.view = [parts[0] || 'today', parts[1]].filter(Boolean).join('-');
   const tab = (parts[0] || 'run') as Tab;
-  setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits'].includes(tab) ? tab : 'run');
+  setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits', 'water'].includes(tab) ? tab : 'run');
 
   const mount = (next: () => void): void => {
     // a slow chunk must never render over a newer route
@@ -110,6 +111,14 @@ async function route(): Promise<void> {
   else if (a === 'habits' && b === 'reflect') (await chunks.habits()).reflectView(app);
   else if (a === 'habits' && b === 'manage') (await chunks.habits()).manageView(app);
   else if (a === 'habits') (await chunks.habits()).habitsTodayView(app);
+  else if (a === 'water' && b === 'stats') (await chunks.water()).waterStatsView(app);
+  else if (a === 'water' && b === 'challenges') (await chunks.water()).waterChallengesView(app);
+  else if (a === 'water' && b === 'pets') (await chunks.water()).waterPetsView(app);
+  else if (a === 'water' && b === 'settings') (await chunks.water()).waterSettingsView(app);
+  else if (a === 'water') {
+    const { waterTodayView } = await chunks.water();
+    mount(() => (cleanup = waterTodayView(app)));
+  }
   else {
     const { todayView } = await chunks.run();
     mount(() => (cleanup = todayView(app)));
@@ -120,6 +129,11 @@ async function route(): Promise<void> {
 applyTheme();
 mountNav();
 addEventListener('hashchange', () => void route(), { passive: true });
+// a cup poured from the More sheet shows up on the screen underneath it
+addEventListener('milo:water', () => {
+  const view = document.body.dataset.view ?? '';
+  if (view === 'water' || view === 'fuel') void route();
+});
 void route();
 
 // the tab you are about to press is already on its way
@@ -134,6 +148,7 @@ document.addEventListener(
     else if (where.includes('cook')) void chunks.cook();
     else if (where.includes('fuel')) void chunks.fuel();
     else if (where.includes('habits')) void chunks.habits();
+    else if (where.includes('water')) void chunks.water();
     else void chunks.run();
   },
   { passive: true, capture: true },

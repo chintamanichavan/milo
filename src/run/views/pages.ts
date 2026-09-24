@@ -3,6 +3,7 @@ import { exportFile, importFile } from '../store';
 import { sheet } from '../../ui/sheet';
 import { clock, longClock } from '../../ui/time';
 import { toast } from '../../ui/toast';
+import { BAR_SLOTS, ICONS, LINKS, setTabOrder, tabOrder, type Tab } from '../../ui/nav';
 import { PERSONAS, personaById } from '../coach';
 import { distanceLabel, paceLabel, routeSvg } from '../gps';
 import { buildIcs, downloadIcs, nextRunDay } from '../ics';
@@ -386,6 +387,24 @@ export function runSettingsView(root: HTMLElement): () => void {
       </div>
     </div>
     <div class="panel">
+      <p class="tag">Tab bar order</p>
+      <ol class="taborder" id="taborder">
+        ${tabOrder()
+          .map((t) => {
+            const l = LINKS.find((x) => x.id === t)!;
+            return `<li class="taborder-row" data-t="${t}">
+              <span class="grip" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg></span>
+              ${ICONS[t]}<b>${l.label}</b>
+              <button class="link tap" data-move="-1" aria-label="Move ${l.label} up">↑</button>
+              <button class="link tap" data-move="1" aria-label="Move ${l.label} down">↓</button>
+            </li>`;
+          })
+          .join('')}
+      </ol>
+      <p class="line sub">Drag to reorder. The first ${BAR_SLOTS} sit in the bar with More as the fifth slot;
+        the rest live behind More, Water always first.</p>
+    </div>
+    <div class="panel">
       <p class="tag">Data</p>
       <div class="chips">
         <button class="chip tap" id="export">Export everything</button>
@@ -457,6 +476,7 @@ export function runSettingsView(root: HTMLElement): () => void {
     downloadIcs('milo-runs', buildIcs('Milo run', load().settings.reminder));
     toast('Calendar file saved');
   });
+  bindTabOrder(root);
   root.querySelector('#export')!.addEventListener('click', exportFile);
   root.querySelector('#import')!.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
@@ -481,4 +501,51 @@ export function runSettingsView(root: HTMLElement): () => void {
     });
   });
   return () => {};
+}
+
+/** drag a row by its grip, or nudge it with the arrows; the bar follows at once */
+function bindTabOrder(root: HTMLElement): void {
+  const list = root.querySelector<HTMLOListElement>('#taborder');
+  if (!list) return;
+  const commit = (): void => {
+    setTabOrder([...list.querySelectorAll<HTMLElement>('[data-t]')].map((row) => row.dataset.t as Tab));
+  };
+  list.addEventListener('click', (ev) => {
+    const button = (ev.target as HTMLElement).closest<HTMLElement>('[data-move]');
+    if (!button) return;
+    const row = button.closest<HTMLElement>('[data-t]')!;
+    if (button.dataset.move === '-1' && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
+    if (button.dataset.move === '1' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+    commit();
+    (row.querySelector(`[data-move="${button.dataset.move}"]`) as HTMLElement | null)?.focus();
+  });
+  let dragging: HTMLElement | null = null;
+  list.addEventListener('pointerdown', (ev) => {
+    const grip = (ev.target as HTMLElement).closest('.grip');
+    if (!grip) return;
+    dragging = grip.closest<HTMLElement>('[data-t]');
+    dragging?.classList.add('dragging');
+    list.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  list.addEventListener('pointermove', (ev) => {
+    if (!dragging) return;
+    for (const row of list.querySelectorAll<HTMLElement>('[data-t]')) {
+      if (row === dragging) continue;
+      const box = row.getBoundingClientRect();
+      if (ev.clientY > box.top && ev.clientY < box.bottom) {
+        const after = ev.clientY > box.top + box.height / 2;
+        list.insertBefore(dragging, after ? row.nextElementSibling : row);
+        break;
+      }
+    }
+  });
+  const drop = (): void => {
+    if (!dragging) return;
+    dragging.classList.remove('dragging');
+    dragging = null;
+    commit();
+  };
+  list.addEventListener('pointerup', drop);
+  list.addEventListener('pointercancel', drop);
 }
