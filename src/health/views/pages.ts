@@ -1,7 +1,6 @@
 import { RUN_KEY } from '../../keys';
 import { wireCharts } from '../charts';
-type DayScore = unknown;
-type ScoreSettings = { age: number; sex: 'male' | 'female'; maxHr: number; needH: number };
+import type { DayScore, ScoreSettings } from '../scores';
 import { ageOf, loadHealth, loadMeta, maxHrOf, sexOf, type HealthData, type HealthMeta } from '../store';
 import { dataView } from './data';
 import { shell } from './shell';

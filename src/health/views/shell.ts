@@ -1,5 +1,5 @@
 import { miloMark } from '../../badge';
-type Zone = 'good' | 'caution' | 'serious';
+import type { Zone } from '../scores';
 
 export function healthSubNav(active: string): string {
   const link = (id: string, label: string): string =>
