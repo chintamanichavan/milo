@@ -1,9 +1,11 @@
 import { RUN_KEY } from '../../keys';
 import { wireCharts } from '../charts';
-import type { DayScore, ScoreSettings } from '../scores';
+import { scoreAll, type DayScore, type ScoreSettings } from '../scores';
 import { ageOf, loadHealth, loadMeta, maxHrOf, sexOf, type HealthData, type HealthMeta } from '../store';
 import { dataView } from './data';
 import { shell } from './shell';
+import { todayView } from './today';
+import { trendDetailView, trendsView } from './trends';
 
 /** what every HEALTH page is drawn from */
 export interface Ctx {
@@ -28,7 +30,7 @@ async function context(): Promise<Ctx> {
   const { age, known } = ageOf(meta);
   const s: ScoreSettings = { age, sex: sexOf(meta), maxHr: maxHrOf(meta), needH: meta.settings.needH };
   const key = JSON.stringify(s);
-  if (!memo || memo.data !== data || memo.key !== key) memo = { data, key, scores: new Map() };
+  if (!memo || memo.data !== data || memo.key !== key) memo = { data, key, scores: scoreAll(data.days, data.workouts, s) };
   const lastDay = data.days[data.days.length - 1]?.date;
   const lastWorkout = data.workouts[data.workouts.length - 1]?.date;
   const latest = [lastDay, lastWorkout].filter(Boolean).sort().pop() ?? null;
@@ -42,7 +44,8 @@ async function context(): Promise<Ctx> {
 }
 
 const VIEWS: Record<string, View> = {
-  '': dataView,
+  '': todayView,
+  trends: trendsView,
   data: dataView,
 };
 
@@ -65,7 +68,7 @@ export function healthView(root: HTMLElement, sub = '', arg?: string): () => voi
     }
     if (!alive) return;
     stop();
-    const view = VIEWS[page];
+    const view = page === 'trends' && arg ? trendDetailView : VIEWS[page];
     const done = view(root, ctx, arg, () => void draw());
     if (done) undo.push(done);
     undo.push(wireCharts(root));

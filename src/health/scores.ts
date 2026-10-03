@@ -387,6 +387,8 @@ export const TREND_FLAT = 0.03;
 /** at least this many days in each window before an arrow is drawn */
 export const TREND_MIN_90 = 30;
 export const TREND_MIN_365 = 120;
+/** VO2 max is only estimated now and then, so it needs far fewer readings */
+export const TREND_MIN_SPARSE: Partial<Record<TrendKey, [number, number]>> = { vo2: [4, 10] };
 
 export interface Trend {
   key: TrendKey;
@@ -405,7 +407,8 @@ export function trend(days: Day[], today: string, key: TrendKey): Trend {
       .filter((v): v is number => v !== undefined && (key !== 'asleep' || v > 0));
   const a = vals(90);
   const b = vals(365);
-  const enough = a.length >= TREND_MIN_90 && b.length >= TREND_MIN_365;
+  const [min90, min365] = TREND_MIN_SPARSE[key] ?? [TREND_MIN_90, TREND_MIN_365];
+  const enough = a.length >= min90 && b.length >= min365;
   const avg90 = a.length ? mean(a) : null;
   const avg365 = b.length ? mean(b) : null;
   let dir: Trend['dir'] = null;
