@@ -18,13 +18,6 @@ const chunks = {
   liftSession: () => import('./lift/views/session'),
   liftExercise: () => import('./lift/views/exercise'),
   liftPages: () => import('./lift/views/pages'),
-  focus: () => import('./focus/views/board'),
-  focusFlight: () => import('./focus/views/flight'),
-  focusLanded: () => import('./focus/views/landed'),
-  focusPages: () => import('./focus/views/pages'),
-  cook: () => import('./cook/views/pages'),
-  fuel: () => import('./fuel/views/pages'),
-  habits: () => import('./habits/views/pages'),
   water: () => import('./water/views/pages'),
 };
 
@@ -34,7 +27,7 @@ async function route(): Promise<void> {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
   document.body.dataset.view = [parts[0] || 'today', parts[1]].filter(Boolean).join('-');
   const tab = (parts[0] || 'run') as Tab;
-  setActiveTab(['lift', 'focus', 'cook', 'fuel', 'habits', 'water'].includes(tab) ? tab : 'run');
+  setActiveTab(['lift', 'water'].includes(tab) ? tab : 'run');
 
   const mount = (next: () => void): void => {
     // a slow chunk must never render over a newer route
@@ -59,6 +52,9 @@ async function route(): Promise<void> {
   } else if (a === 'lift' && b === 'session') {
     const { liftSessionView } = await chunks.liftSession();
     mount(() => (cleanup = liftSessionView(app, c)));
+  } else if (a === 'lift' && b === 'exercise' && d === 'guide') {
+    const { liftGuideView } = await import('./lift/views/guide');
+    mount(() => (cleanup = liftGuideView(app, c)));
   } else if (a === 'lift' && b === 'exercise') {
     const { liftExerciseView } = await chunks.liftExercise();
     mount(() => (cleanup = liftExerciseView(app, c)));
@@ -70,50 +66,14 @@ async function route(): Promise<void> {
   else if (a === 'lift' && b?.startsWith('stats')) (await chunks.liftPages()).liftStatsView(app);
   else if (a === 'lift' && b === 'progress') (await chunks.liftPages()).progressView(app);
   else if (a === 'lift' && b === 'settings') (await chunks.liftPages()).liftSettingsView(app);
+  else if (a === 'lift' && b?.startsWith('print')) (await import('./lift/views/guide')).liftPrintView(app);
   else if (a === 'lift' && b === 'report') (await import('./lift/views/more')).liftReportView(app);
   else if (a === 'lift' && b === 'data') (await import('./lift/views/more')).liftDataView(app);
   else if (a === 'lift' && b?.startsWith('import')) (await import('./lift/views/more')).liftImportView(app);
   else if (a === 'lift') {
     const { liftTodayView } = await chunks.lift();
     mount(() => (cleanup = liftTodayView(app)));
-  } else if (a === 'focus' && b === 'flight') {
-    const { flightView } = await chunks.focusFlight();
-    mount(() => (cleanup = flightView(app, Number(c) || 25, decodeURIComponent(d ?? ''))));
-  } else if (a === 'focus' && b === 'landed') {
-    const { landedView } = await chunks.focusLanded();
-    mount(() => (cleanup = landedView(app)));
-  } else if (a === 'focus' && b === 'routes') {
-    const { routesView } = await chunks.focusPages();
-    mount(() => (cleanup = routesView(app)));
-  } else if (a === 'focus' && b === 'hangar') (await chunks.focusPages()).hangarView(app);
-  else if (a === 'focus' && b === 'badges') (await chunks.focusPages()).badgesView(app);
-  else if (a === 'focus' && b?.startsWith('stats')) (await chunks.focusPages()).statsView(app);
-  else if (a === 'focus' && b === 'settings') (await chunks.focusPages()).focusSettingsView(app);
-  else if (a === 'focus') {
-    const { focusBoardView } = await chunks.focus();
-    mount(() => (cleanup = focusBoardView(app)));
-  } else if (a === 'cook' && b === 'recipe') (await chunks.cook()).recipeView(app, c);
-  else if (a === 'cook' && b === 'edit') (await chunks.cook()).recipeEditView(app, c);
-  else if (a === 'cook' && b === 'new') (await chunks.cook()).recipeEditView(app);
-  else if (a === 'cook' && b === 'mode') {
-    const { cookModeView } = await chunks.cook();
-    mount(() => (cleanup = cookModeView(app, c)));
-  } else if (a === 'cook' && b === 'list') (await chunks.cook()).shoppingView(app);
-  else if (a === 'cook' && b === 'plan') (await chunks.cook()).plannerView(app);
-  else if (a === 'cook') (await chunks.cook()).cookHomeView(app);
-  else if (a === 'fuel' && b === 'nutrients') (await chunks.fuel()).nutrientsView(app);
-  else if (a === 'fuel' && b === 'weight') (await chunks.fuel()).weightView(app);
-  else if (a === 'fuel' && b === 'trends') (await chunks.fuel()).trendsView(app);
-  else if (a === 'fuel' && b === 'program') (await chunks.fuel()).programView(app);
-  else if (a === 'fuel') (await chunks.fuel()).fuelTodayView(app);
-  else if (a === 'habits' && b === 'new') (await chunks.habits()).habitNewView(app);
-  else if (a === 'habits' && b === 'edit') (await chunks.habits()).habitNewView(app, c);
-  else if (a === 'habits' && b === 'habit') (await chunks.habits()).habitDetailView(app, c);
-  else if (a === 'habits' && b === 'templates') (await chunks.habits()).templatesView(app);
-  else if (a === 'habits' && b === 'lessons') (await chunks.habits()).lessonsView(app);
-  else if (a === 'habits' && b === 'reflect') (await chunks.habits()).reflectView(app);
-  else if (a === 'habits' && b === 'manage') (await chunks.habits()).manageView(app);
-  else if (a === 'habits') (await chunks.habits()).habitsTodayView(app);
+  }
   else if (a === 'water' && b === 'stats') (await chunks.water()).waterStatsView(app);
   else if (a === 'water' && b === 'challenges') (await chunks.water()).waterChallengesView(app);
   else if (a === 'water' && b === 'pets') (await chunks.water()).waterPetsView(app);
@@ -135,7 +95,7 @@ addEventListener('hashchange', () => void route(), { passive: true });
 // a cup poured from the More sheet shows up on the screen underneath it
 addEventListener('milo:water', () => {
   const view = document.body.dataset.view ?? '';
-  if (view === 'water' || view === 'fuel') void route();
+  if (view === 'water') void route();
 });
 void route();
 
@@ -147,10 +107,6 @@ document.addEventListener(
     if (!tab) return;
     const where = tab.getAttribute('href') ?? '';
     if (where.includes('lift')) void chunks.lift();
-    else if (where.includes('focus')) void chunks.focus();
-    else if (where.includes('cook')) void chunks.cook();
-    else if (where.includes('fuel')) void chunks.fuel();
-    else if (where.includes('habits')) void chunks.habits();
     else if (where.includes('water')) void chunks.water();
     else void chunks.run();
   },
@@ -183,7 +139,7 @@ const updateSW = registerSW({
     document.dispatchEvent(new CustomEvent('milo:update-ready'));
     const settle = (): void => {
       const view = document.body.dataset.view ?? '';
-      const busy = view.startsWith('run-') || view.startsWith('focus-flight') || view.startsWith('lift-session');
+      const busy = view.startsWith('run-') || view.startsWith('lift-session');
       if (busy) return;
       window.removeEventListener('hashchange', settle);
       void updateSW(true);

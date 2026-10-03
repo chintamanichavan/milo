@@ -1,3 +1,4 @@
+import type { Exercise } from './library';
 import type { LiftState } from './store';
 import { exerciseById } from './store';
 
@@ -24,6 +25,16 @@ const HELPERS: Record<string, string> = {
   'upper back': 'back',
   lats: 'back',
 };
+
+/** the muscles an exercise trains: the main one in full, each helper at half */
+export function musclesOf(exercise: Exercise): Map<string, number> {
+  const out = new Map<string, number>([[exercise.muscle, 1]]);
+  for (const raw of exercise.also.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const helper = HELPERS[raw] ?? raw;
+    if (MUSCLE_ORDER.includes(helper) && !out.has(helper)) out.set(helper, 0.5);
+  }
+  return out;
+}
 
 export function setsPerMuscle(state: LiftState, sinceMs: number): Map<string, number> {
   const out = new Map<string, number>(MUSCLE_ORDER.map((m) => [m, 0]));

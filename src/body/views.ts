@@ -1,4 +1,4 @@
-import { deletePhoto, getPhoto, savePhoto } from '../cook/photos';
+import { deletePhoto, getPhoto, savePhoto } from '../ui/photos';
 import { lineChart } from '../ui/chart';
 import { sheet } from '../ui/sheet';
 import { dayKey } from '../ui/time';

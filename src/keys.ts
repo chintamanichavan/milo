@@ -4,6 +4,10 @@
  */
 export const RUN_KEY = 'c25k.v1';
 export const LIFT_KEY = 'c25k.lift.v1';
+/**
+ * The Focus, Cook, Fuel and Habits tabs are gone; backups still carry their old data so it is
+ * never lost. FUEL_KEY also still holds the weigh-ins (see body/weight).
+ */
 export const FOCUS_KEY = 'c25k.focus.v1';
 export const COOK_KEY = 'c25k.cook.v1';
 export const FUEL_KEY = 'c25k.fuel.v1';

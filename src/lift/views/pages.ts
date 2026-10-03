@@ -1,7 +1,6 @@
 import { miloMark } from '../../badge';
 import { bindBodyPanels, bodyPanels } from '../../body/views';
-import { loadFuel } from '../../fuel/store';
-import { trend as fuelTrend } from '../../fuel/tdee';
+import { addWeight, loadWeights, trend as weightTrend } from '../../body/weight';
 import { barList, columns, lineChart } from '../../ui/chart';
 import { sheet } from '../../ui/sheet';
 import { clock, dayKey } from '../../ui/time';
@@ -19,6 +18,7 @@ import {
   deleteSession,
   exerciseById,
   fromLb,
+  toLb,
   lastPerformed,
   loadLift,
   saveLift,
@@ -61,7 +61,7 @@ const allExercises = (state: LiftState): Exercise[] => [...LIBRARY, ...state.cus
 
 /** photos of your own for exercises, painted in once they are on screen */
 export async function paintLiftPhotos(root: ParentNode): Promise<void> {
-  const { getPhoto } = await import('../../cook/photos');
+  const { getPhoto } = await import('../../ui/photos');
   for (const el of root.querySelectorAll<HTMLElement>('[data-photo]')) {
     if (!el.dataset.photo || el.style.backgroundImage) continue;
     const url = await getPhoto(el.dataset.photo);
@@ -99,6 +99,7 @@ export function libraryView(root: HTMLElement): () => void {
       ? list
           .map(
             (e) => `<details class="day ex-row"><summary>
+              <span class="mini-fig" data-fig="${e.id}"></span>
               <span>${state.favourites.includes(e.id) ? '★ ' : ''}${e.name}</span>
               <span class="sub">${e.muscle} · ${GEAR_NAMES[e.gear] ?? e.gear}</span></summary>
               ${imgFor(e.id) ? `<span class="ex-photo" data-photo="${imgFor(e.id)}"></span>` : ''}
@@ -109,6 +110,7 @@ export function libraryView(root: HTMLElement): () => void {
                 <button class="link tap" data-fav="${e.id}">${
                   state.favourites.includes(e.id) ? 'unfavourite' : 'favourite'
                 }</button>
+                <a class="link tap" href="#/lift/exercise/${e.id}/guide">how to</a>
                 <a class="link tap" href="#/lift/exercise/${e.id}">history</a>
               </div></details>`,
           )
@@ -121,6 +123,20 @@ export function libraryView(root: HTMLElement): () => void {
       shown += 60;
       draw();
     });
+    void import('./guide').then(({ paintMinis }) => paintMinis(root.querySelector('#libList')!));
+  };
+
+  // the body as a filter: tap a muscle to see what trains it
+  const drawBody = (): void => {
+    const pick = root.querySelector<HTMLElement>('#bodyPick')!;
+    pick.innerHTML = `${muscleMap(new Map(muscle ? [[muscle, 1]] : []))}
+      <p class="line sub">${muscle ? `Showing ${muscle}. Tap another muscle, or tap it again for all.` : 'Tap a muscle to see the exercises for it.'}</p>`;
+  };
+  const setMuscle = (value: string): void => {
+    muscle = value;
+    for (const el of root.querySelectorAll<HTMLElement>('#muscles [data-muscle]')) el.classList.toggle('on', el.dataset.muscle === value);
+    if (!root.querySelector<HTMLElement>('#bodyPick')!.hidden) drawBody();
+    draw();
   };
 
   root.innerHTML = shell(
@@ -130,15 +146,18 @@ export function libraryView(root: HTMLElement): () => void {
       <h1>${allExercises(state).length}<span><i> · </i>in the book</span></h1>
       <input class="dest" id="q" placeholder="search by name, muscle or kit" aria-label="search">
       <div class="chips" id="muscles">
+        <button class="chip tap" id="byMuscle" aria-expanded="false">by muscle</button>
         <button class="chip tap on" data-muscle="">all</button>
         ${MUSCLES.map((m) => `<button class="chip tap" data-muscle="${m}">${m}</button>`).join('')}
       </div>
+      <div class="body-pick" id="bodyPick" hidden></div>
       <div class="chips" id="gears">
         <button class="chip tap on" data-gear="">any kit</button>
         ${GEARS.map((g) => `<button class="chip tap" data-gear="${g}">${GEAR_NAMES[g]}</button>`).join('')}
         <button class="chip tap" id="mine">at ${activeGym(state).name}</button>
         <button class="chip tap" id="faves">★ favourites</button>
         <button class="chip tap" id="addEx">+ custom</button>
+        <a class="chip tap" href="#/lift/print">print all</a>
       </div>
     </div>
     <div id="libList"></div>`,
@@ -161,7 +180,21 @@ export function libraryView(root: HTMLElement): () => void {
       draw();
     });
   };
-  chipGroup('muscles', 'muscle');
+  root.querySelector('#muscles')!.addEventListener('click', (ev) => {
+    const chip = (ev.target as HTMLElement).closest<HTMLElement>('[data-muscle]');
+    if (chip) setMuscle(chip.dataset.muscle ?? '');
+  });
+  root.querySelector('#byMuscle')!.addEventListener('click', (ev) => {
+    const pick = root.querySelector<HTMLElement>('#bodyPick')!;
+    pick.hidden = !pick.hidden;
+    (ev.target as HTMLElement).classList.toggle('on', !pick.hidden);
+    (ev.target as HTMLElement).setAttribute('aria-expanded', String(!pick.hidden));
+    if (!pick.hidden) drawBody();
+  });
+  root.querySelector('#bodyPick')!.addEventListener('click', (ev) => {
+    const region = (ev.target as Element).closest<SVGElement>('.mm-region');
+    if (region) setMuscle(region.dataset.muscle === muscle ? '' : region.dataset.muscle ?? '');
+  });
   chipGroup('gears', 'gear');
   root.querySelector('#mine')!.addEventListener('click', (ev) => {
     gymOnly = !gymOnly;
@@ -326,26 +359,37 @@ export function liftHistoryView(root: HTMLElement): () => void {
   return () => {};
 }
 
-/* ---------- 19 + 109 + 110. the body, shared with Fuel ---------- */
+/* ---------- 19 + 109 + 110. the body ---------- */
 
 export function bodyView(root: HTMLElement): () => void {
   const state = loadLift();
   const units = state.settings.units;
-  const fuel = loadFuel();
-  const line = fuelTrend(fuel.weights);
   const draw = (): void => {
+    const line = weightTrend(loadWeights());
     root.innerHTML = shell(
       'body',
       `<div class="hero">
         <p class="tag section">Body</p>
         <h1>${line.length ? showWeight(line[line.length - 1].lb, units) : '—'}<span><i> · </i>trend weight</span></h1>
-        <p class="line sub">Weight, measurements and photos are shared with Fuel — log them in either place.</p>
-        <div class="chips"><a class="chip tap" href="#/fuel/weight">+ weigh-in</a></div>
+        <p class="line sub">${line.length > 1 ? 'The trend smooths out the day-to-day noise of the scale.' : 'Weigh in a few times and a trend appears.'}</p>
+        <div class="chips"><button class="chip tap" id="addW">+ weigh-in</button></div>
       </div>
       <div class="panel"><p class="tag">Weight</p>${lineChart(line.map((p) => p.lb), 'trend weight')}</div>
       ${bodyPanels()}`,
     );
     bindBodyPanels(root, draw);
+    root.querySelector('#addW')!.addEventListener('click', () => {
+      const host = sheet(
+        'Weigh-in',
+        `<label class="field row"><span>${units === 'kg' ? 'Kilograms' : 'Pounds'}</span><input class="num" id="w" inputmode="decimal"></label>
+         <button class="big tap" data-done="1" id="wGo">SAVE</button>`,
+      );
+      host.querySelector('#wGo')!.addEventListener('click', () => {
+        const value = Number((host.querySelector('#w') as HTMLInputElement).value);
+        if (value > 0) addWeight(Math.round(toLb(value, units) * 10) / 10);
+        draw();
+      });
+    });
   };
   draw();
   return () => {};
@@ -610,13 +654,35 @@ export function routinesView(root: HTMLElement): () => void {
         minutes: Number(value('gMin')),
       };
       const plan = generatePlan(answers);
-      const next = loadLift();
-      next.routines = [...next.routines.filter((r) => r.folder !== 'My plan'), ...plan.routines];
-      next.settings.planId = plan.id;
-      next.settings.planWeek = 1;
-      saveLift(next);
-      routinesView(root);
-      toast(`${plan.name} · ${plan.shape}`);
+      // look before you keep it: every day, every exercise, with its picture
+      const known = loadLift();
+      const preview = sheet(
+        plan.name,
+        `<p class="line sub">${plan.shape} · built for ${activeGym(known).name}</p>
+         ${plan.routines
+           .map(
+             (r) => `<div class="plan-day"><p class="tag">${r.name}</p>${r.items
+               .map(
+                 (it) => `<a class="plan-ex tap" href="#/lift/exercise/${it.exerciseId}/guide" data-done="1">
+                   <span class="mini-fig" data-fig="${it.exerciseId}"></span>
+                   <b>${exerciseById(known, it.exerciseId).name}</b>
+                   <span class="tag">${it.sets} × ${it.low}–${it.high}</span></a>`,
+               )
+               .join('')}</div>`,
+           )
+           .join('')}
+         <button class="big tap" data-done="1" id="gUse">USE THIS PLAN</button>`,
+      );
+      void import('./guide').then(({ paintMinis }) => paintMinis(preview));
+      preview.querySelector('#gUse')!.addEventListener('click', () => {
+        const next = loadLift();
+        next.routines = [...next.routines.filter((r) => r.folder !== 'My plan'), ...plan.routines];
+        next.settings.planId = plan.id;
+        next.settings.planWeek = 1;
+        saveLift(next);
+        routinesView(root);
+        toast(`${plan.name} · ${plan.shape}`);
+      });
     });
   });
   return () => {};

@@ -8,28 +8,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon-v7.png'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico,ktx2,wasm}'],
-        // the satellite map only works online; the big JPEGs are a fallback for
-        // devices that cannot transcode KTX2, fetched on demand rather than up front
-        globIgnores: ['**/satmap-*.js', '**/satmap-*.css', '**/earth/*.jpg'],
-        runtimeCaching: [
-          {
-            urlPattern: /\/earth\/.*\.jpg$/,
-            handler: 'CacheFirst',
-            options: { cacheName: 'earth-fallback', expiration: { maxEntries: 8 } },
-          },
-          {
-            // the scanner's engine and English model, fetched once and kept
-            urlPattern: /^https:\/\/(cdn\.jsdelivr\.net\/npm\/(tesseract|@tesseract)|tessdata\.projectnaptha\.com)/,
-            handler: 'CacheFirst',
-            options: { cacheName: 'ocr', expiration: { maxEntries: 12 } },
-          },
-          {
-            urlPattern: /\/foods\.json\.gz$/,
-            handler: 'CacheFirst',
-            options: { cacheName: 'foods', expiration: { maxEntries: 2 } },
-          },
-        ],
+        globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
       manifest: {

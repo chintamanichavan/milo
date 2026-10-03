@@ -125,9 +125,10 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
         const done = entry.sets.filter((s) => s.done).length;
         const superset = cfg?.group ? `<span class="tag ss">superset ${cfg.group}</span>` : '';
         if (i !== active.open)
-          return `<button class="ex tap${cfg?.group ? ' grouped' : ''}" data-open="${i}">
+          return `<div class="ex-closed"><button class="ex tap${cfg?.group ? ' grouped' : ''}" data-open="${i}">
             <span class="ex-name">${ex.name}</span>
-            <span class="tag">${superset}${done} / ${entry.sets.length}</span></button>`;
+            <span class="tag">${superset}${done} / ${entry.sets.length}</span></button>
+            <button class="ex-how tap" data-how="${ex.id}" aria-label="How to do ${ex.name}">how</button></div>`;
         const past = pastSets(state, entry.exerciseId);
         const tip = suggest(past, cfg, ex.inc, { rpe: cfg?.rpe, deload: state.settings.deloadNext });
         const rows = entry.sets
@@ -158,6 +159,7 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
           <p class="line sub why">${tip.why}</p>
           <div class="sets">${rows}</div>
           <div class="ex-foot">
+            <button class="link tap" data-how="${ex.id}">How</button>
             <button class="link tap" data-add="1">Add set</button>
             <button class="link tap" data-drop="1">Remove set</button>
             <button class="link tap" data-warm="1">Warm-up sets</button>
@@ -305,6 +307,11 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
       save();
       return drawList();
     }
+    const how = el.closest<HTMLElement>('[data-how]');
+    if (how) {
+      void import('./guide').then(({ guideSheet }) => guideSheet(how.dataset.how!));
+      return;
+    }
     const entry = active.entries[active.open];
     const ex = exerciseById(state, entry.exerciseId);
 
@@ -359,12 +366,13 @@ export function liftSessionView(root: HTMLElement, routineId: string): () => voi
         `<p class="line sub">What ${activeGym(state).name} has, same muscle first.</p>
          <div class="cards swap-cards">${alternatives(ex, 8, activeGym(state).equipment)
           .map(
-            (a) => `<button class="card tap" data-alt="${a.id}">
+            (a) => `<button class="card tap" data-alt="${a.id}"><span class="mini-fig" data-fig="${a.id}"></span>
               <b>${a.name}</b><span class="tag">${a.muscle} · ${GEAR_NAMES[a.gear]}</span>${ratingHtml(a)}</button>`,
           )
           .join('')}</div>
          <label class="sw tap"><input type="checkbox" id="forever"><span>Keep it in the routine, not just today</span></label>`,
       );
+      void import('./guide').then(({ paintMinis }) => paintMinis(host));
       host.querySelector('.cards')!.addEventListener('click', (e2) => {
         const card = (e2.target as HTMLElement).closest<HTMLElement>('[data-alt]');
         if (!card) return;

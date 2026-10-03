@@ -1,11 +1,10 @@
-import { addWeight, loadFuel } from '../fuel/store';
+import { addWeight, loadWeights } from './weight';
 import { BODY_KEY, LIFT_KEY } from '../keys';
 import { dayKey } from '../ui/time';
 
 /**
  * The body, kept once for the whole app: tape measurements and progress
- * photos, shown in Fuel's weight page and in Lift's body page alike. Weight
- * itself stays with Fuel, which owns the scale.
+ * photos, shown in Lift's body page. Weigh-ins live in ./weight.
  */
 export type Girth =
   | 'neck'
@@ -73,7 +72,7 @@ function migrate(state: BodyState): void {
     const lift = JSON.parse(localStorage.getItem(LIFT_KEY) ?? 'null') as {
       measurements?: (Measurement & { weightLb?: number })[];
     } | null;
-    const known = new Set(loadFuel().weights.map((w) => w.date));
+    const known = new Set(loadWeights().map((w) => w.date));
     for (const { weightLb, ...rest } of lift?.measurements ?? []) {
       const date = rest.date.slice(0, 10);
       if (Object.keys(rest).length > 1) state.measurements.push({ ...rest, date });

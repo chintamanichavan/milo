@@ -506,7 +506,7 @@ export function runSettingsView(root: HTMLElement): () => void {
   root.querySelector('#reset')!.addEventListener('click', () => {
     const host = sheet(
       'Reset the programme',
-      `<p class="line">This clears your runs and starts week one again. Lifting, focus and the rest stay as they are.</p>
+      `<p class="line">This clears your runs and starts week one again. Lifting and the rest stay as they are.</p>
        <div class="row-actions"><button class="big tap" data-done="1" id="really">YES, RESET</button></div>`,
     );
     host.querySelector('#really')!.addEventListener('click', () => {

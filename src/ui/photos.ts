@@ -65,7 +65,7 @@ export async function deletePhoto(id: string): Promise<void> {
   }
 }
 
-/** Downscale before storing — a phone photo is far bigger than a recipe needs. */
+/** Downscale before storing — a phone photo is far bigger than the app needs. */
 export async function savePhoto(file: Blob, maxWidth = 1200): Promise<string> {
   const id = `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const bitmap = await createImageBitmap(file);

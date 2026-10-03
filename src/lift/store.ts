@@ -280,7 +280,7 @@ export function addMeasurement(entry: Measurement): void {
 export const lastPerformed = (state: LiftState, routineId: string): Session | undefined =>
   [...state.sessions].reverse().find((s) => s.routineId === routineId);
 
-/** bodyweight now, smoothed a little, in pounds: Fuel's scale first, old lift entries after */
+/** bodyweight now, smoothed a little, in pounds: the shared scale first, old lift entries after */
 export function trendWeight(state: LiftState): number {
   try {
     const fuel = JSON.parse(localStorage.getItem(FUEL_KEY) ?? 'null') as { weights?: { lb: number }[] } | null;

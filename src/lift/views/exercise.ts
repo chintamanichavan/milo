@@ -105,6 +105,7 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
           <button class="chip tap" id="fav">${
             state.favourites.includes(id) ? '★ favourite' : '☆ favourite'
           }</button>
+          <a class="chip tap" href="#/lift/exercise/${id}/guide">how to</a>
           <button class="chip tap" id="swap">alternatives</button>
           <label class="chip tap">${state.settings.images?.[id] ? 'change photo' : '+ photo'}<input type="file" id="exPhoto" accept="image/*" hidden></label>
           ${state.settings.images?.[id] ? '<button class="chip tap" id="exPhotoDrop">remove photo</button>' : ''}
@@ -143,7 +144,7 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
   root.querySelector('#exPhoto')!.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    const { savePhoto } = await import('../../cook/photos');
+    const { savePhoto } = await import('../../ui/photos');
     const photoId = await savePhoto(file, 1000);
     const images = { ...(loadLift().settings.images ?? {}), [id]: photoId };
     setLiftSettings({ images });
@@ -157,15 +158,16 @@ export function liftExerciseView(root: HTMLElement, id: string): () => void {
     liftExerciseView(root, id);
   });
   root.querySelector('#swap')!.addEventListener('click', () => {
-    sheet(
+    const host = sheet(
       `Instead of ${ex.name}`,
       `<div class="cards swap-cards">${alternatives(ex, 10, activeGym(loadLift()).equipment)
         .map(
-          (a) => `<a class="card tap" href="#/lift/exercise/${a.id}"><b>${a.name}</b>
+          (a) => `<a class="card tap" href="#/lift/exercise/${a.id}"><span class="mini-fig" data-fig="${a.id}"></span><b>${a.name}</b>
             <span class="tag">${a.muscle} · ${GEAR_NAMES[a.gear]}</span>${ratingHtml(a)}</a>`,
         )
         .join('')}</div>`,
     );
+    void import('./guide').then(({ paintMinis }) => paintMinis(host));
     toast('Same muscle, different feel');
   });
   return () => {};

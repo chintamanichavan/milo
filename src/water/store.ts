@@ -1,5 +1,6 @@
 import { now } from '../clock';
-import { addEntry, FUEL_KEY, loadFuel, removeEntry, trendWeight, updateEntry, type Meal } from '../fuel/store';
+import { trendWeight } from '../body/weight';
+import { FUEL_KEY } from '../keys';
 import { LIFT_KEY } from '../lift/store';
 import { load as loadRun } from '../run/store';
 import { dayKey } from '../ui/time';
@@ -31,8 +32,6 @@ export interface Sip {
   /** raw volume, in ounces */
   oz: number;
   note?: string;
-  /** the Fuel entry this drink's calories went to, if any */
-  fuelId?: string;
 }
 
 export interface WaterSettings {
@@ -46,7 +45,7 @@ export interface WaterSettings {
   reminders: number;
   /** per-drink cup, in ounces */
   sizes: Record<string, number>;
-  /** what one tap on the Fuel card pours */
+  /** what one tap in the More sheet pours */
   quick: string;
   /** the drinks pinned to the Today grid, in order */
   panel: string[];
@@ -55,8 +54,6 @@ export interface WaterSettings {
   /** the chime on each drink, and the one when the goal is met */
   chime: string;
   cheer: string;
-  /** send the calories in drinks over to Fuel's log */
-  toFuel: boolean;
 }
 
 export interface ChallengeRun {
@@ -94,7 +91,6 @@ const defaults = (): WaterSettings => {
     hidden: [],
     chime: 'drop',
     cheer: 'fanfare',
-    toFuel: false,
   };
 };
 
@@ -233,7 +229,7 @@ function activeOn(date: string): boolean {
 
 /** half an ounce per pound, more on a training day, more again when Chicago is hot */
 export function goalParts(state: WaterState, date = today()): GoalParts {
-  const measured = trendWeight(loadFuel());
+  const measured = trendWeight();
   const weightLb = measured || 160;
   const base = Math.round(weightLb * 0.5);
   const activity = activeOn(date) ? 16 : 0;
@@ -292,33 +288,9 @@ export function logSip(drinkId: string, oz?: number, at = now(), note?: string):
     oz: oz ?? cupFor(state, drinkId),
     ...(note ? { note } : {}),
   };
-  sendToFuel(state, sip);
   state.sips.push(sip);
   saveWater(state);
   return { sip, earned: award() };
-}
-
-const mealAt = (at: number): Meal => {
-  const h = hourOf(at);
-  return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 21 ? 'dinner' : 'snack';
-};
-
-/** a drink with calories, logged in Fuel too when you have asked for that */
-function sendToFuel(state: WaterState, sip: Sip): void {
-  const kcal = kcalOf(state, sip);
-  if (!state.settings.toFuel || kcal <= 0) return;
-  const drink = drinkById(state, sip.drinkId);
-  sip.fuelId = addEntry({
-    date: dayOf(sip.at),
-    meal: mealAt(sip.at),
-    foodId: `water-${drink.id}`,
-    name: `${drink.name} (${Math.round(sip.oz * 10) / 10} oz)`,
-    grams: Math.round(sip.oz * 29.57),
-    kcal,
-    protein: 0,
-    carbs: Math.round(kcal / 4),
-    fat: 0,
-  });
 }
 
 /** takes back the last thing logged, whenever it was drunk */
@@ -327,7 +299,6 @@ export function undoLast(): Sip | null {
   if (!state.sips.length) return null;
   const last = state.sips.reduce((a, b) => (b.made > a.made ? b : a));
   state.sips = state.sips.filter((s) => s.id !== last.id);
-  if (last.fuelId) removeEntry(last.fuelId);
   saveWater(state);
   return last;
 }
@@ -336,12 +307,7 @@ export function updateSip(id: string, patch: Partial<Sip>): void {
   const state = loadWater();
   state.sips = state.sips.map((s) => {
     if (s.id !== id) return s;
-    const next = { ...s, ...patch };
-    if (next.fuelId) {
-      const kcal = kcalOf(state, next);
-      updateEntry(next.fuelId, { kcal, carbs: Math.round(kcal / 4), date: dayOf(next.at), meal: mealAt(next.at) });
-    }
-    return next;
+    return { ...s, ...patch };
   });
   saveWater(state);
   award();
@@ -349,8 +315,6 @@ export function updateSip(id: string, patch: Partial<Sip>): void {
 
 export function deleteSip(id: string): void {
   const state = loadWater();
-  const gone = state.sips.find((s) => s.id === id);
-  if (gone?.fuelId) removeEntry(gone.fuelId);
   state.sips = state.sips.filter((s) => s.id !== id);
   saveWater(state);
 }

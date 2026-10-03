@@ -1,7 +1,7 @@
 services:
   web:
     image: nginx:alpine
-    container_name: c25k
+    container_name: milo
     restart: unless-stopped
     ports:
       - "127.0.0.1:8200:80"

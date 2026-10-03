@@ -82,7 +82,7 @@ const hourLabel = (h: number): string => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'
 
 const two = (n: number): string => String(n).padStart(2, '0');
 
-/** a progress ring, like Fuel's, but any size */
+/** a progress ring, any size */
 function ring(fraction: number, size: number, stroke: number, cls = ''): string {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -150,7 +150,7 @@ export function waterTodayView(root: HTMLElement): () => void {
 
     const why = parts.manual
       ? `Your own goal: ${amount(parts.manual, unit)}.`
-      : `${amount(parts.base, unit)} for ${Math.round(parts.weightLb)} lb${parts.weighed ? '' : ' (a guess — weigh in on Fuel)'}${
+      : `${amount(parts.base, unit)} for ${Math.round(parts.weightLb)} lb${parts.weighed ? '' : ' (a guess — weigh in under Lift → Body)'}${
           parts.activity ? ` + ${amount(parts.activity, unit)} for today's training` : ''
         }${parts.heat ? ` + ${amount(parts.heat, unit)} for a hot day` : ''}.`;
 
@@ -226,11 +226,7 @@ export function waterTodayView(root: HTMLElement): () => void {
           ${
             kcal
               ? `<div class="panel"><p class="tag">Calories from drinks<span>${kcal} kcal</span></p>
-                <p class="line sub">${
-                  state.settings.toFuel
-                    ? 'Logged in Fuel as you go.'
-                    : 'Not counted in Fuel. <a class="link" href="#/water/settings">Send them there</a>'
-                }</p></div>`
+</div>`
               : ''
           }
           <div class="panel wl-fact"><p class="tag">Did you know</p><p class="line">${factFor(today())}</p></div>
@@ -727,7 +723,7 @@ export function waterSettingsView(root: HTMLElement): void {
       <div class="panel">
         <p class="tag">Goal</p>
         <p class="line sub">Worked out: ${amount(parts.base, unit)} for ${Math.round(parts.weightLb)} lb (half an ounce a pound${
-          parts.weighed ? ', from your Fuel weight' : ' — no weigh-in yet, so 160 lb is a guess'
+          parts.weighed ? ', from your trend weight' : ' — no weigh-in yet, so 160 lb is a guess'
         }), plus ${amount(16, unit)} on a day you run or lift, plus ${amount(12, unit)} when Chicago tops 85°F${
           state.heat?.date === today() ? ` (today ${Math.round(state.heat.maxF)}°F)` : ''
         }.</p>
@@ -749,8 +745,7 @@ export function waterSettingsView(root: HTMLElement): void {
               ).join('')}</select><button class="link tap" data-hear="${k}" aria-label="Hear it">▶</button></span></label>`,
           )
           .join('')}
-        <label class="sw tap"><input type="checkbox" id="toFuel" ${s.toFuel ? 'checked' : ''}><span>Log the calories in drinks in Fuel too</span></label>
-        <label class="field"><span class="tag">One tap from Fuel and More pours</span>
+        <label class="field"><span class="tag">One tap from More pours</span>
           <select class="dest" id="quick">${allDrinks(state)
             .map((d) => `<option value="${d.id}"${d.id === s.quick ? ' selected' : ''}>${d.name}</option>`)
             .join('')}</select></label>
@@ -839,7 +834,6 @@ export function waterSettingsView(root: HTMLElement): void {
     again();
   });
   input('#sound').addEventListener('change', () => setWaterSettings({ sound: input('#sound').checked }));
-  input('#toFuel').addEventListener('change', () => setWaterSettings({ toFuel: input('#toFuel').checked }));
   for (const k of ['chime', 'cheer'] as const)
     root.querySelector(`#${k}`)!.addEventListener('change', (ev) => {
       const id = (ev.target as HTMLSelectElement).value;
