@@ -2,10 +2,14 @@ import { RUN_KEY } from '../../keys';
 import { wireCharts } from '../charts';
 import { scoreAll, type DayScore, type ScoreSettings } from '../scores';
 import { ageOf, loadHealth, loadMeta, maxHrOf, sexOf, type HealthData, type HealthMeta } from '../store';
+import { behaviorsView } from './behaviors';
 import { dataView } from './data';
+import { reportView } from './report';
 import { shell } from './shell';
+import { sleepView } from './sleep';
 import { todayView } from './today';
 import { trendDetailView, trendsView } from './trends';
+import { workoutDetailView, workoutsView } from './workouts';
 
 /** what every HEALTH page is drawn from */
 export interface Ctx {
@@ -46,6 +50,10 @@ async function context(): Promise<Ctx> {
 const VIEWS: Record<string, View> = {
   '': todayView,
   trends: trendsView,
+  sleep: sleepView,
+  workouts: workoutsView,
+  report: reportView,
+  behaviors: behaviorsView,
   data: dataView,
 };
 
@@ -68,7 +76,7 @@ export function healthView(root: HTMLElement, sub = '', arg?: string): () => voi
     }
     if (!alive) return;
     stop();
-    const view = page === 'trends' && arg ? trendDetailView : VIEWS[page];
+    const view = page === 'trends' && arg ? trendDetailView : page === 'workouts' && arg ? workoutDetailView : VIEWS[page];
     const done = view(root, ctx, arg, () => void draw());
     if (done) undo.push(done);
     undo.push(wireCharts(root));

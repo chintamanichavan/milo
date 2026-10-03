@@ -28,7 +28,7 @@ export function hm(min: number): string {
   const m = Math.round(min);
   const h = Math.floor(Math.abs(m) / 60);
   const r = Math.abs(m) % 60;
-  return `${m < 0 ? '−' : ''}${h ? `${h}h ${String(r).padStart(2, '0')}m` : `${r}m`}`;
+  return `${m < 0 ? '−' : ''}${h ? (r ? `${h}h ${String(r).padStart(2, '0')}m` : `${h}h`) : `${r}m`}`;
 }
 
 /** 10:45 PM from minutes past midnight (any day either side) */

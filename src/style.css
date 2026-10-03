@@ -4293,3 +4293,142 @@ a.hl-row {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* ---------- health: sleep, workouts, reports, behaviors ---------- */
+
+.hl-nums.hl-nums4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 700px) {
+  .hl-nums.hl-nums4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.hl-nums .tag {
+  line-height: 1.3;
+}
+
+.panel > .tag .chips {
+  gap: 4px;
+}
+
+.panel > .tag .chip {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.hl-wk {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: var(--u);
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.hl-wk-month > .tag + .hl-wk {
+  border-top: 0;
+}
+
+.hl-wk-icon {
+  color: var(--muted);
+}
+
+.hl-wk b {
+  font-weight: 500;
+}
+
+.hl-wk small {
+  display: block;
+  font-size: var(--t12);
+}
+
+.hl-wk-nums {
+  font-size: var(--t12);
+  text-align: right;
+}
+
+.hl-wk-nums small {
+  color: var(--muted);
+}
+
+.hl-wk-title svg {
+  vertical-align: -2px;
+}
+
+.hl-report summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 32px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.hl-report summary::-webkit-details-marker {
+  display: none;
+}
+
+.hl-report .line {
+  font-size: var(--t14);
+}
+
+.hl-awards {
+  display: grid;
+  gap: var(--u);
+}
+
+.hl-award {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: calc(var(--u) * 1.5);
+  align-items: center;
+}
+
+.hl-award span b {
+  font: 500 var(--t14) / 1.3 var(--sans);
+}
+
+.hl-award small {
+  display: block;
+  font-size: var(--t12);
+}
+
+.hl-award > b {
+  font: 500 var(--t22) / 1 var(--mono);
+}
+
+.hl-award.none {
+  opacity: 0.5;
+}
+
+.hl-laurel {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--run);
+}
+
+.hl-laurel svg {
+  position: absolute;
+  inset: 0;
+}
+
+.hl-beh .line {
+  font-size: var(--t14);
+}
+
+.hl-beh .line.sub {
+  margin-top: -4px;
+  font-size: var(--t12);
+}
+
+.hl-beh small {
+  color: var(--muted);
+}

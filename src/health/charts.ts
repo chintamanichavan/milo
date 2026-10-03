@@ -9,7 +9,7 @@
 export const W = 320;
 export const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
 /** single-hue steps of the teal, for anything sequential */
-export const SEQ = [0.18, 0.34, 0.52, 0.74, 1];
+export const SEQ = [0.3, 0.45, 0.6, 0.8, 1];
 export const seq = (step: number): string => `rgba(42, 160, 141, ${SEQ[Math.max(0, Math.min(4, step))]})`;
 
 export interface Series {
@@ -73,12 +73,21 @@ interface Frame {
   scale: { lo: number; hi: number; ticks: number[] };
 }
 
-function frame(values: number[], o: { height?: number; zero?: boolean; right?: number; lo?: number; hi?: number; fmt: (v: number) => string; invert?: boolean }): Frame {
+function stepScale(lo: number, hi: number, step: number): { lo: number; hi: number; ticks: number[] } {
+  const a = Math.floor(lo / step) * step;
+  const b = Math.ceil(hi / step) * step;
+  const every = (b - a) / step > 5 ? 2 : 1;
+  const ticks: number[] = [];
+  for (let v = a; v <= b; v += step * every) ticks.push(v);
+  return { lo: a, hi: b, ticks };
+}
+
+function frame(values: number[], o: { height?: number; zero?: boolean; right?: number; lo?: number; hi?: number; fmt: (v: number) => string; invert?: boolean; step?: number }): Frame {
   const h = o.height ?? 140;
   const lo0 = o.lo ?? (o.zero ? 0 : Math.min(...values));
   const hi0 = o.hi ?? Math.max(...values);
   const pad = o.zero || o.lo !== undefined ? 0 : (hi0 - lo0) * 0.08;
-  const scale = niceScale(lo0 - pad, hi0 + (o.hi !== undefined ? 0 : pad));
+  const scale = o.step ? stepScale(lo0, hi0, o.step) : niceScale(lo0 - pad, hi0 + (o.hi !== undefined ? 0 : pad));
   const widest = Math.max(...scale.ticks.map((t) => o.fmt(t).length));
   const left = 8 + widest * 6;
   const top = 12;
@@ -137,6 +146,8 @@ export interface LineOpts extends Base {
   /** dots instead of a line */
   dots?: boolean;
   invert?: boolean;
+  /** grid lines at multiples of this, such as 60 minutes */
+  step?: number;
   /** custom tooltip lines, one per index */
   tips?: string[];
   /** the table's columns, when the default is not right */
@@ -160,8 +171,9 @@ export function lineChart(o: LineOpts): string {
       const ya = fr.y(Math.min(fr.scale.hi, b.to));
       const yb = fr.y(Math.max(fr.scale.lo, b.from));
       const top = Math.min(ya, yb);
-      return `<rect x="${fr.left}" y="${top.toFixed(1)}" width="${fr.right - fr.left}" height="${Math.abs(yb - ya).toFixed(1)}" fill="${b.fill}"/>${
-        b.label ? `<text class="hc-t" x="${fr.right - 3}" y="${(top + 9).toFixed(1)}" text-anchor="end">${b.label}</text>` : ''
+      const tall = Math.abs(yb - ya);
+      return `<rect x="${fr.left}" y="${top.toFixed(1)}" width="${fr.right - fr.left}" height="${tall.toFixed(1)}" fill="${b.fill}"/>${
+        b.label && tall >= 11 ? `<text class="hc-t" x="${fr.left + 3}" y="${(top + tall / 2 + 3.5).toFixed(1)}">${b.label}</text>` : ''
       }`;
     })
     .join('');
@@ -198,8 +210,9 @@ export function lineChart(o: LineOpts): string {
     if (v !== null && (peakI < 0 || v > (first[peakI] as number))) peakI = i;
   });
   let labels = '';
+  if (o.dots) lastI = -1;
   if (lastI >= 0) labels += valueLabel(x(lastI), fr.y(first[lastI]!), o.fmt(first[lastI]!), fr, o.invert);
-  if (peakI >= 0 && peakI !== lastI && Math.abs(x(peakI) - x(lastI)) > 34)
+  if (!o.dots && peakI >= 0 && peakI !== lastI && Math.abs(x(peakI) - x(lastI)) > 34)
     labels += valueLabel(x(peakI), fr.y(first[peakI]!), o.fmt(first[peakI]!), fr, o.invert);
   if (lastI >= 0)
     labels += `<circle cx="${x(lastI).toFixed(1)}" cy="${fr.y(first[lastI]!).toFixed(1)}" r="3" fill="${SERIES[0]}"/>`;
@@ -241,6 +254,7 @@ export interface BarOpts extends Base {
   tips?: string[];
   table?: { head: string[]; rows: (string | number)[][] };
   colors?: string[];
+  step?: number;
 }
 
 /** a top-rounded bar from the baseline: radius 4 or less */
@@ -339,6 +353,7 @@ export interface RangeOpts extends Base {
   /** [from, to] per index, null for a gap */
   ranges: ([number, number] | null)[];
   name: string;
+  step?: number;
   tips: string[];
   table: { head: string[]; rows: (string | number)[][] };
 }
