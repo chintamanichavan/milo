@@ -1,6 +1,6 @@
 import { sheet } from './sheet';
 
-export type Tab = 'run' | 'lift' | 'water';
+export type Tab = 'run' | 'lift' | 'water' | 'health';
 
 const G = (body: string): string =>
   `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
@@ -10,6 +10,7 @@ export const ICONS: Record<Tab | 'more' | 'settings', string> = {
   run: G('<path d="M13.5 4.5a1.2 1.2 0 1 0 0-.1"/><path d="M9 21l2.5-5 3-2-1-4-3.5 2-2 3"/><path d="M14.5 10l3 1.5 2.5-1"/>'),
   lift: G('<path d="M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12"/>'),
   water: G('<path d="M12 3.2c3.6 4.6 6.2 8 6.2 11.1a6.2 6.2 0 0 1-12.4 0c0-3.1 2.6-6.5 6.2-11.1z"/><path d="M9 15.2a3 3 0 0 0 3 2.8"/>'),
+  health: G('<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/><path d="M3 12.5h4.5l1.5-2.5 2.5 5 1.5-2.5H21"/>'),
   more: G('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
   settings: G('<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>'),
 };
@@ -18,6 +19,7 @@ export const LINKS: { id: Tab; label: string; href: string; blurb: string }[] = 
   { id: 'run', label: 'Run', href: '#/', blurb: 'couch to 5K' },
   { id: 'lift', label: 'Lift', href: '#/lift', blurb: 'strength' },
   { id: 'water', label: 'Water', href: '#/water', blurb: 'drink up' },
+  { id: 'health', label: 'Health', href: '#/health', blurb: 'recovery and sleep' },
 ];
 
 export { TABS_KEY } from '../keys';
@@ -26,7 +28,7 @@ import { TABS_KEY } from '../keys';
 /** four tabs across the bottom and More in the fifth slot; the rest live behind More */
 export const BAR_SLOTS = 4;
 
-const DEFAULT_ORDER: Tab[] = ['run', 'lift', 'water'];
+const DEFAULT_ORDER: Tab[] = ['run', 'lift', 'water', 'health'];
 
 export function tabOrder(): Tab[] {
   try {

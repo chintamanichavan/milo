@@ -1,4 +1,4 @@
-import { BODY_KEY, COOK_KEY, FOCUS_KEY, FUEL_KEY, HABITS_KEY, LIFT_KEY, TABS_KEY, WATER_KEY } from '../keys';
+import { BODY_KEY, COOK_KEY, FOCUS_KEY, FUEL_KEY, HABITS_KEY, HEALTH_KEY, LIFT_KEY, TABS_KEY, WATER_KEY } from '../keys';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
 export interface CompletedRun {
@@ -219,6 +219,8 @@ export function exportFile(): void {
     water: JSON.parse(localStorage.getItem(WATER_KEY) ?? 'null') as unknown,
     nav: JSON.parse(localStorage.getItem(TABS_KEY) ?? 'null') as unknown,
     body: JSON.parse(localStorage.getItem(BODY_KEY) ?? 'null') as unknown,
+    // settings and import history only; the health data itself re-imports from the export zip
+    health: JSON.parse(localStorage.getItem(HEALTH_KEY) ?? 'null') as unknown,
   };
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -241,6 +243,7 @@ export async function importFile(file: File): Promise<boolean> {
       water?: unknown;
       nav?: unknown;
       body?: unknown;
+      health?: unknown;
     } & Partial<State>;
     // older exports were the run half on its own
     const run = Array.isArray(parsed.completedRuns) ? parsed : parsed.run;
@@ -258,6 +261,7 @@ export async function importFile(file: File): Promise<boolean> {
     if (parsed.water) localStorage.setItem(WATER_KEY, JSON.stringify(parsed.water));
     if (parsed.nav) localStorage.setItem(TABS_KEY, JSON.stringify(parsed.nav));
     if (parsed.body) localStorage.setItem(BODY_KEY, JSON.stringify(parsed.body));
+    if (parsed.health) localStorage.setItem(HEALTH_KEY, JSON.stringify(parsed.health));
     return true;
   } catch {
     return false;

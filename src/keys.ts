@@ -15,3 +15,8 @@ export const HABITS_KEY = 'c25k.habits.v1';
 export const WATER_KEY = 'c25k.water.v1';
 export const TABS_KEY = 'c25k.nav.v1';
 export const BODY_KEY = 'c25k.body.v1';
+/**
+ * HEALTH's small half: last import, coverage, settings. The days and workouts
+ * live in IndexedDB and come back from the Apple Health zip, not from a backup.
+ */
+export const HEALTH_KEY = 'c25k.health.v1';
