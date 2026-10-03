@@ -3796,6 +3796,12 @@ ol.guide-list li::marker {
   display: block;
 }
 
+.today .hl-row .sub,
+.today .hl-wk .sub,
+.today .hl-award .sub {
+  margin-bottom: 0;
+}
+
 .hl-row .mono {
   color: var(--muted);
   font: 400 var(--t12) / 1.4 var(--mono);
@@ -4285,8 +4291,7 @@ a.hl-row {
   }
 
   .hl-hero {
-    position: sticky;
-    top: calc(var(--u) * 4);
+    margin-bottom: calc(var(--u) * 3);
   }
 
   .hl-tiles {

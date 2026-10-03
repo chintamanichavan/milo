@@ -7,6 +7,8 @@
  */
 
 export const W = 320;
+/** a full-width panel on a wide screen gets a wider drawing, so its text stays the same size */
+export const wideW = (): number => (matchMedia('(min-width: 700px)').matches ? 680 : W);
 export const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
 /** single-hue steps of the teal, for anything sequential */
 export const SEQ = [0.3, 0.45, 0.6, 0.8, 1];
@@ -26,6 +28,8 @@ interface Base {
   ticks?: string[];
   fmt: (v: number) => string;
   height?: number;
+  /** drawing width; 320 unless the chart spans a wide panel */
+  width?: number;
   /** column header for the table's first column */
   what?: string;
 }
@@ -64,6 +68,7 @@ export function numbers(head: string[], rows: (string | number)[][]): string {
 }
 
 interface Frame {
+  w: number;
   h: number;
   left: number;
   right: number;
@@ -82,7 +87,7 @@ function stepScale(lo: number, hi: number, step: number): { lo: number; hi: numb
   return { lo: a, hi: b, ticks };
 }
 
-function frame(values: number[], o: { height?: number; zero?: boolean; right?: number; lo?: number; hi?: number; fmt: (v: number) => string; invert?: boolean; step?: number }): Frame {
+function frame(values: number[], o: { height?: number; width?: number; zero?: boolean; right?: number; lo?: number; hi?: number; fmt: (v: number) => string; invert?: boolean; step?: number }): Frame {
   const h = o.height ?? 140;
   const lo0 = o.lo ?? (o.zero ? 0 : Math.min(...values));
   const hi0 = o.hi ?? Math.max(...values);
@@ -91,11 +96,12 @@ function frame(values: number[], o: { height?: number; zero?: boolean; right?: n
   const widest = Math.max(...scale.ticks.map((t) => o.fmt(t).length));
   const left = 8 + widest * 6;
   const top = 12;
-  const bottom = h - 18;
+  const bottom = h - 22;
   const span = scale.hi - scale.lo || 1;
   const y = (v: number): number =>
     o.invert ? top + ((v - scale.lo) / span) * (bottom - top) : bottom - ((v - scale.lo) / span) * (bottom - top);
-  return { h, left, right: W - (o.right ?? 8), top, bottom, y, scale };
+  const w = o.width ?? W;
+  return { w, h, left, right: w - (o.right ?? 8), top, bottom, y, scale };
 }
 
 function axes(fr: Frame, fmt: (v: number) => string, xs: { x: number; label: string }[]): string {
@@ -115,7 +121,7 @@ function axes(fr: Frame, fmt: (v: number) => string, xs: { x: number; label: str
 
 function figure(o: Base, svg: string, fr: Frame, x0: number, step: number, n: number, tips: string[], extra = '', attrs = ''): string {
   return `<figure class="hc"${attrs} data-x0="${x0.toFixed(2)}" data-step="${step.toFixed(3)}" data-n="${n}" data-tips="${esc(JSON.stringify(tips))}">
-    <svg class="hc-svg" viewBox="0 0 ${W} ${fr.h}" role="img" aria-label="${esc(o.caption)}">
+    <svg class="hc-svg" viewBox="0 0 ${fr.w} ${fr.h}" role="img" aria-label="${esc(o.caption)}">
       ${svg}
       <line class="hc-x" x1="0" x2="0" y1="${fr.top - 4}" y2="${fr.bottom}"/>
     </svg>
@@ -506,7 +512,7 @@ export function wireCharts(root: HTMLElement): () => void {
     const svg = fig.querySelector('svg');
     if (!n || !svg) return hide();
     const box = svg.getBoundingClientRect();
-    const k = box.width / W;
+    const k = box.width / (svg.viewBox.baseVal.width || W);
     const vx = (ev.clientX - box.left) / k;
     let i: number;
     let xAt: number;

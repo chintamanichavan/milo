@@ -1,4 +1,4 @@
-import { barChart, lineChart } from '../charts';
+import { barChart, lineChart, wideW } from '../charts';
 import { addDays, dateRange, mean, trend, TREND_KEYS, ZONE_WORD, zoneOf, type DayScore, type TrendKey, type Zone } from '../scores';
 import type { Day } from '../types';
 import type { Ctx, View } from './pages';
@@ -77,7 +77,7 @@ const zoneLegend = (): string =>
   `<div class="hl-zones">${(['good', 'caution', 'serious'] as Zone[]).map((z) => status(z, ZONE_WORD[z])).join('')}</div>`;
 
 /** recovery as bars coloured by zone, with the word for each in the tooltip */
-export function recoveryBars(ctx: Ctx, dates: string[], caption: string): string {
+export function recoveryBars(ctx: Ctx, dates: string[], caption: string, width?: number): string {
   const values = dates.map((d) => ctx.scores.get(d)?.recovery ?? null);
   return `${barChart({
     caption,
@@ -85,6 +85,7 @@ export function recoveryBars(ctx: Ctx, dates: string[], caption: string): string
     ticks: sparseTicks(dates),
     series: [{ name: 'Recovery', values }],
     fills: values.map(zoneFill),
+    width,
     fmt: (v) => String(Math.round(v)),
     tips: dates.map((d, i) => `${dayLabel(d)}\n${values[i] === null ? 'no score' : `${values[i]} · ${ZONE_WORD[zoneOf(values[i]!)]}`}`),
     table: {
@@ -112,6 +113,7 @@ export const trendsView: View = (root, ctx) => {
       series: [{ name: M[key].label, values: series(ctx, M[key], month) }],
       fmt: M[key].fmt,
       height: 110,
+      width: wideW(),
     });
   root.innerHTML = shell(
     'trends',
@@ -141,8 +143,8 @@ export const trendsView: View = (root, ctx) => {
         series: [{ name: 'Strain', values: series(ctx, M.strain, month) }],
         fmt: (v) => dec(v),
       })}</div>
-      <div class="panel"><p class="tag">HRV<span>30 days</span></p>${line('hrv', 'Heart rate variability, the day’s average. Higher is usually better rested.')}</div>
-      <div class="panel"><p class="tag">Resting heart rate<span>30 days</span></p>${line('rhr', 'Resting heart rate. Lower is usually better rested.')}</div>
+      <div class="panel hl-wide"><p class="tag">HRV<span>30 days</span></p>${line('hrv', 'Heart rate variability, the day’s average. Higher is usually better rested.')}</div>
+      <div class="panel hl-wide"><p class="tag">Resting heart rate<span>30 days</span></p>${line('rhr', 'Resting heart rate. Lower is usually better rested.')}</div>
     </div>`,
     'hl-page',
   );
@@ -175,11 +177,12 @@ export const trendDetailView: View = (root, ctx, key, again) => {
     ticks: sparseTicks(dates),
     series: [{ name: m.label, values }],
     fmt: m.fmt,
+    width: wideW(),
     ref: avg !== null ? { value: avg, label: 'avg' } : undefined,
   };
   const chart =
     key === 'recovery' && range <= 90
-      ? recoveryBars(ctx, dates, opts.caption)
+      ? recoveryBars(ctx, dates, opts.caption, wideW())
       : m.bars && range <= 30
         ? barChart(opts)
         : lineChart({ ...opts, zero: m.zero, dots: range <= 30 && !m.bars });

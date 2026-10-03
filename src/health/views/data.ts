@@ -1,6 +1,6 @@
 import { closeSheet, sheet } from '../../ui/sheet';
 import { toast } from '../../ui/toast';
-import { numbers, seq, W } from '../charts';
+import { numbers, seq, wideW } from '../charts';
 import { cancelImport, clearJob, currentJob, onJob, startImport, type Job } from '../ingest/client';
 import { coverage, COVER, deleteAllHealth, setHealthSettings, type Cover } from '../store';
 import type { View } from './pages';
@@ -85,6 +85,7 @@ function progressHtml(job: Job | null): string {
 function coverageStrip(byMonth: Record<string, Partial<Record<Cover, number>>>): string {
   const months = Object.keys(byMonth).sort().slice(-36);
   if (!months.length) return '<p class="line sub">Coverage shows once something is imported.</p>';
+  const W = wideW();
   const left = 66;
   const rowH = 14;
   const top = 4;

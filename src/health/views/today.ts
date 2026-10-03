@@ -237,10 +237,12 @@ export const todayView: View = (root, ctx, _arg, again) => {
   root.innerHTML = shell(
     '',
     `<div class="hl-split">
-      ${recoveryHero(ctx, date, sc, isLatest)}
-      <div class="hl-side">
+      <div class="hl-left">
+        ${recoveryHero(ctx, date, sc, isLatest)}
         ${strainPanel(ctx, date, sc, isLatest)}
         ${ringsPanel(ctx, d)}
+      </div>
+      <div class="hl-side">
         ${sleepPanel(ctx, d, sc, isLatest)}
         ${vitalsPanel(ctx.data.days, date)}
         ${agePanel(ctx, date)}

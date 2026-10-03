@@ -1,4 +1,4 @@
-import { barChart, hStack, lineChart, seq } from '../charts';
+import { barChart, hStack, lineChart, seq, wideW } from '../charts';
 import { addDays, strainOf, timeInZones, workoutLoad, ZONE_FLOORS } from '../scores';
 import type { Workout } from '../types';
 import type { Ctx, View } from './pages';
@@ -56,6 +56,7 @@ export const workoutsView: View = (root, ctx, _arg, again) => {
         fmt: (v) => `${Math.round(v)}`,
         what: 'week',
         height: 120,
+        width: wideW(),
       })}</div>
       ${[...groups.entries()]
         .map(
@@ -126,6 +127,7 @@ export const workoutDetailView: View = (root, ctx, id) => {
       bands: bounds.map((b, k) => ({ from: b, to: k < 4 ? bounds[k + 1] : hi, fill: BAND[k], label: `Z${k + 1}` })),
       what: 'time',
       height: 200,
+      width: wideW(),
     });
   }
 

@@ -1,4 +1,4 @@
-import { barChart, lineChart, rangeChart } from '../charts';
+import { barChart, lineChart, rangeChart, wideW } from '../charts';
 import { addDays, consistencyWord, dateRange, mean, sd } from '../scores';
 import type { View } from './pages';
 import { clockOf, dayLabel, hm, noData, shell, sparseTicks } from './shell';
@@ -49,6 +49,7 @@ export const sleepView: View = (root, ctx, _arg, again) => {
     ],
     fmt: hm,
     direct: true,
+    width: wideW(),
     step: 120,
     tips: recent.map((d) => {
       const day = byDate.get(d);
@@ -87,6 +88,7 @@ export const sleepView: View = (root, ctx, _arg, again) => {
     zero: true,
     step: 120,
     height: 110,
+    width: wideW(),
   });
 
   const band = rangeChart({
