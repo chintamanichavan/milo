@@ -1,0 +1,22 @@
+import { MAX, cleanTask, due, mondayOf, runDays, score, DEFAULT_PLAN } from './model.ts';
+let bad = 0;
+const t = (name, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`, ok ? '' : `\n  got ${JSON.stringify(got)}\n want ${JSON.stringify(want)}`);
+};
+t('22 boxes a week', MAX, 22);
+t('no cleaning on Sunday', due('clean', 6), false);
+t('cook on Wednesday', due('cook', 2), true);
+t('no cooking on Monday', due('cook', 0), false);
+t('Monday is the bathroom', cleanTask(new Date(2026, 9, 26)).startsWith('Bathroom'), true);
+t('first Saturday is the fridge', cleanTask(new Date(2026, 9, 3)).startsWith('Deep: Fridge'), true);
+t('fourth Saturday is the wardrobe', cleanTask(new Date(2026, 9, 24)).startsWith('Deep: Wardrobe'), true);
+t('Sunday belongs to the week before', mondayOf(new Date(2026, 10, 1)).getDate(), 26);
+t('Monday starts its own week', mondayOf(new Date(2026, 9, 26)).getDate(), 26);
+t('default runs Tue Thu Sat in Run\'s numbering', runDays(DEFAULT_PLAN), [2, 4, 6]);
+t('a Sunday run is day 0', runDays(['lift', 'lift', 'lift', 'lift', 'lift', 'lift', 'run']), [0]);
+t('everything ticked is 22', score(() => true), 22);
+t('a box not due never counts', score((s, d) => s === 'cook' && d === 0), 0);
+console.log(bad ? `${bad} FAILED` : 'week: all green');
+process.exit(bad ? 1 : 0);

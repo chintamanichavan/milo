@@ -18,6 +18,7 @@ const chunks = {
   liftSession: () => import('./lift/views/session'),
   liftExercise: () => import('./lift/views/exercise'),
   liftPages: () => import('./lift/views/pages'),
+  week: () => import('./week/views/pages'),
   water: () => import('./water/views/pages'),
   health: () => import('./health/views/pages'),
 };
@@ -28,7 +29,7 @@ async function route(): Promise<void> {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
   document.body.dataset.view = [parts[0] || 'today', parts[1]].filter(Boolean).join('-');
   const tab = (parts[0] || 'run') as Tab;
-  setActiveTab(['lift', 'water', 'health'].includes(tab) ? tab : 'run');
+  setActiveTab(['lift', 'week', 'water', 'health'].includes(tab) ? tab : 'run');
 
   const mount = (next: () => void): void => {
     // a slow chunk must never render over a newer route
@@ -75,6 +76,11 @@ async function route(): Promise<void> {
     const { liftTodayView } = await chunks.lift();
     mount(() => (cleanup = liftTodayView(app)));
   }
+  else if (a === 'week' && b === 'plan') (await chunks.week()).weekPlanView(app);
+  else if (a === 'week') {
+    const { weekView } = await chunks.week();
+    mount(() => (cleanup = weekView(app)));
+  }
   else if (a === 'water' && b === 'stats') (await chunks.water()).waterStatsView(app);
   else if (a === 'water' && b === 'challenges') (await chunks.water()).waterChallengesView(app);
   else if (a === 'water' && b === 'pets') (await chunks.water()).waterPetsView(app);
@@ -112,6 +118,7 @@ document.addEventListener(
     if (!tab) return;
     const where = tab.getAttribute('href') ?? '';
     if (where.includes('lift')) void chunks.lift();
+    else if (where.includes('week')) void chunks.week();
     else if (where.includes('water')) void chunks.water();
     else if (where.includes('health')) void chunks.health();
     else void chunks.run();

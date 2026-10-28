@@ -1,4 +1,4 @@
-import { BODY_KEY, COOK_KEY, FOCUS_KEY, FUEL_KEY, HABITS_KEY, HEALTH_KEY, LIFT_KEY, TABS_KEY, WATER_KEY } from '../keys';
+import { BODY_KEY, COOK_KEY, FOCUS_KEY, FUEL_KEY, HABITS_KEY, HEALTH_KEY, LIFT_KEY, TABS_KEY, WATER_KEY, WEEK_KEY } from '../keys';
 import { RUNS_PER_WEEK, TOTAL_WEEKS } from './weeks';
 
 export interface CompletedRun {
@@ -217,6 +217,7 @@ export function exportFile(): void {
     fuel: JSON.parse(localStorage.getItem(FUEL_KEY) ?? 'null') as unknown,
     habits: JSON.parse(localStorage.getItem(HABITS_KEY) ?? 'null') as unknown,
     water: JSON.parse(localStorage.getItem(WATER_KEY) ?? 'null') as unknown,
+    week: JSON.parse(localStorage.getItem(WEEK_KEY) ?? 'null') as unknown,
     nav: JSON.parse(localStorage.getItem(TABS_KEY) ?? 'null') as unknown,
     body: JSON.parse(localStorage.getItem(BODY_KEY) ?? 'null') as unknown,
     // settings and import history only; the health data itself re-imports from the export zip
@@ -241,6 +242,7 @@ export async function importFile(file: File): Promise<boolean> {
       fuel?: unknown;
       habits?: unknown;
       water?: unknown;
+      week?: unknown;
       nav?: unknown;
       body?: unknown;
       health?: unknown;
@@ -259,6 +261,7 @@ export async function importFile(file: File): Promise<boolean> {
     if (parsed.fuel) localStorage.setItem(FUEL_KEY, JSON.stringify(parsed.fuel));
     if (parsed.habits) localStorage.setItem(HABITS_KEY, JSON.stringify(parsed.habits));
     if (parsed.water) localStorage.setItem(WATER_KEY, JSON.stringify(parsed.water));
+    if (parsed.week) localStorage.setItem(WEEK_KEY, JSON.stringify(parsed.week));
     if (parsed.nav) localStorage.setItem(TABS_KEY, JSON.stringify(parsed.nav));
     if (parsed.body) localStorage.setItem(BODY_KEY, JSON.stringify(parsed.body));
     if (parsed.health) localStorage.setItem(HEALTH_KEY, JSON.stringify(parsed.health));

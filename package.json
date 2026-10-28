@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node src/lift/progression.test.mjs && node src/health/scores.test.mjs"
+    "test": "node src/lift/progression.test.mjs && node src/health/scores.test.mjs && node src/week/model.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

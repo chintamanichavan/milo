@@ -20,3 +20,5 @@ export const BODY_KEY = 'c25k.body.v1';
  * live in IndexedDB and come back from the Apple Health zip, not from a backup.
  */
 export const HEALTH_KEY = 'c25k.health.v1';
+/** the weekly page: clean, cook, workout, study */
+export const WEEK_KEY = 'c25k.week.v1';

@@ -4437,3 +4437,147 @@ a.hl-row {
 .hl-beh small {
   color: var(--muted);
 }
+
+/* ---------- week: the four-system page ---------- */
+.wk-today {
+  display: grid;
+  gap: var(--u);
+  padding: 0;
+  margin: calc(var(--u) * 2) 0 0;
+  list-style: none;
+}
+
+.wk-row {
+  display: grid;
+  gap: calc(var(--u) * 1.5);
+  grid-template-columns: 44px 1fr auto;
+  align-items: start;
+  padding: var(--u) calc(var(--u) * 1.5);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.wk-row b {
+  font: 500 var(--t17) / 1.3 var(--sans);
+}
+
+.wk-row .sub {
+  margin: 2px 0 0;
+}
+
+.wk-row .link {
+  min-height: 44px;
+}
+
+.wk-tick,
+.wk-cell {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.wk-tick:disabled,
+.wk-cell:disabled {
+  cursor: default;
+}
+
+.wk-box {
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--muted);
+  border-radius: var(--r);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.wk-box.on {
+  border-color: var(--run);
+  background: var(--run);
+  box-shadow: inset 0 0 0 3px var(--panel);
+}
+
+.wk-cell:disabled .wk-box:not(.on) {
+  opacity: 0.35;
+}
+
+.wk-topic {
+  margin-top: var(--u);
+  font: 400 var(--t14) / 1 var(--sans);
+  text-align: left;
+}
+
+.wk-grid {
+  display: grid;
+  grid-template-columns: auto repeat(7, minmax(0, 1fr));
+  column-gap: 2px;
+  align-items: center;
+  justify-items: center;
+}
+
+.wk-name {
+  justify-self: start;
+  color: var(--muted);
+  font: 500 var(--t12) / 1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wk-day {
+  color: var(--muted);
+  font: 500 var(--t12) / 1 var(--mono);
+}
+
+.wk-day.now {
+  color: var(--run);
+}
+
+.wk-cell {
+  min-width: 0;
+  width: 100%;
+}
+
+.wk-grid .wk-box {
+  width: 20px;
+  height: 20px;
+}
+
+.wk-cell.off {
+  color: var(--line);
+  font-family: var(--mono);
+}
+
+.wk-plan {
+  display: grid;
+  gap: 0 calc(var(--u) * 1.5);
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+}
+
+.wk-plan .chips {
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.wk-plan .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+  font-size: var(--t12);
+}
+
+.field.row .num.wk-span {
+  width: 136px;
+}
+
+.week .field .sub {
+  margin: 0;
+}
